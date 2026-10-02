@@ -1,7 +1,10 @@
 //! Command line client for the notch.
 //!
 //!   notchctl notify <title> [body]   show a message
+//!   notchctl open [tab]              open the island (tabs: activity, terminals)
+//!   notchctl close                   close the island
 //!   notchctl settings                open the settings window
+//!   notchctl terminals               list open terminals and what runs in them
 //!   notchctl claude-hook             forward a Claude Code hook payload read from stdin
 //!   notchctl send '<json event>'     send a raw event
 
@@ -12,7 +15,10 @@ use notch_core::{Event, claude, ipc};
 
 const USAGE: &str = "usage:
   notchctl notify <title> [body]
+  notchctl open [activity|terminals]
+  notchctl close
   notchctl settings
+  notchctl terminals
   notchctl claude-hook        (reads the hook JSON from stdin)
   notchctl send '<json event>'";
 
@@ -25,7 +31,19 @@ fn main() -> ExitCode {
             title: (*title).to_owned(),
             body: rest.join(" "),
         }),
+        ["open", rest @ ..] if rest.len() <= 1 => send(&Event::Open {
+            tab: rest.first().map(|tab| (*tab).to_owned()),
+        }),
+        ["close"] => send(&Event::Close),
         ["settings"] => send(&Event::OpenSettings),
+        ["terminals"] => {
+            let (terminals, _) = notch_core::terminals::Scanner::new().scan();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&terminals).unwrap_or_default()
+            );
+            ExitCode::SUCCESS
+        }
         ["claude-hook"] => claude_hook(),
         ["send", json] => match serde_json::from_str(json) {
             Ok(event) => send(&event),

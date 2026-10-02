@@ -28,6 +28,8 @@ QtObject {
     property string headline: qsTr("All quiet")
     property string subline: ""
     property bool happy: false
+    // [{ id, app, app_pid, shell_pid, shell, cwd, command: { pgid, name, args, started_at, cpu } | null }]
+    property var terminals: []
     // A plain notification is on screen; it takes precedence over the activity card.
     property bool notifying: false
     property string time: Qt.formatTime(new Date(), "HH:mm")
@@ -66,6 +68,8 @@ QtObject {
         if (ev.type === "notify") {
             say(ev.title, ev.body, 5000)
             notifying = true
+        } else if (ev.type === "terminals") {
+            terminals = ev.terminals
         } else if (ev.type === "agent") {
             notifying = false
             handleAgent(ev)

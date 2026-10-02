@@ -10,6 +10,7 @@ Window {
     property var targetScreen: null
     required property NotchState notch
     required property var settings
+    required property var bridge
 
     // Layer-shell placement (Wayland). Ignored on X11, where x/y below are used.
     LayerShell.Window.scope: "notch"
@@ -33,9 +34,14 @@ Window {
     readonly property int collapsedWidth: 190
     // Matches the top panel by default, so the closed island never covers windows.
     readonly property int collapsedHeight: settings.height
+    // The tab picked by the user; an island opened by an event always shows activity.
+    property string tab: "activity"
+    readonly property string shownTab: opened ? tab : "activity"
+    readonly property bool onActivity: shownTab === "activity"
+
     // Show the detailed activity card instead of the headline.
-    readonly property bool showCard: notch.focus !== null && notch.focus.steps.length > 0 && !notch.notifying
-    readonly property int expandedWidth: showCard ? 640 : 470
+    readonly property bool showCard: onActivity && notch.focus !== null && notch.focus.steps.length > 0 && !notch.notifying
+    readonly property int expandedWidth: shownTab === "terminals" ? 540 : showCard ? 640 : 470
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
     // Opened by a click; closed by another click or when the pointer leaves.
@@ -195,6 +201,56 @@ Window {
 
             Behavior on opacity { NumberAnimation { duration: 220 } }
 
+            // Tabs, only when the user opened the island
+            Row {
+                visible: root.opened
+                spacing: 6
+
+                Repeater {
+                    model: [
+                        { id: "activity", label: qsTr("Activity") },
+                        { id: "terminals", label: qsTr("Terminals") + "  " + root.notch.terminals.length }
+                    ]
+
+                    Rectangle {
+                        id: tabChip
+
+                        required property var modelData
+                        readonly property bool current: root.tab === modelData.id
+
+                        width: tabLabel.implicitWidth + 20
+                        height: 24
+                        radius: 12
+                        color: current ? "#26ffffff" : tabArea.containsMouse ? "#12ffffff" : "transparent"
+
+                        Text {
+                            id: tabLabel
+                            anchors.centerIn: parent
+                            text: tabChip.modelData.label
+                            color: tabChip.current ? "#f2f3f5" : "#8b909a"
+                            font.pixelSize: 12
+                            font.weight: tabChip.current ? Font.DemiBold : Font.Normal
+                        }
+
+                        MouseArea {
+                            id: tabArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.tab = tabChip.modelData.id
+                        }
+                    }
+                }
+            }
+
+            TerminalsView {
+                width: parent.width
+                visible: root.shownTab === "terminals"
+                terminals: root.notch.terminals
+                bridge: root.bridge
+                onFocused: root.opened = false
+            }
+
             ActivityCard {
                 width: parent.width
                 visible: root.showCard
@@ -204,7 +260,7 @@ Window {
             }
 
             Row {
-                visible: !root.showCard
+                visible: root.onActivity && !root.showCard
                 spacing: 14
 
                 Face {
@@ -237,7 +293,7 @@ Window {
 
             Column {
                 width: parent.width
-                visible: root.notch.sessions.count > (root.showCard ? 1 : 0)
+                visible: root.onActivity && root.notch.sessions.count > (root.showCard ? 1 : 0)
 
                 Repeater {
                     model: root.notch.sessions

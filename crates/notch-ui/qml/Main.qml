@@ -28,6 +28,10 @@ QtObject {
             const ev = JSON.parse(json)
             if (ev.type === "open_settings")
                 app.openSettings()
+            else if (ev.type === "open")
+                app.openIslands(ev.tab)
+            else if (ev.type === "close")
+                app.closeIslands()
             else
                 app.state.handleEvent(ev)
         }
@@ -53,10 +57,26 @@ QtObject {
             targetScreen: modelData
             notch: app.state
             settings: app.settings
+            bridge: app.bridge
         }
     }
 
     property Window settingsWindow: null
+
+    function openIslands(tab) {
+        for (let i = 0; i < islands.count; i++) {
+            const island = islands.objectAt(i)
+            if (tab)
+                island.tab = tab
+            island.opened = true
+        }
+    }
+
+    function closeIslands() {
+        for (let i = 0; i < islands.count; i++)
+            islands.objectAt(i).opened = false
+        state.dismiss()
+    }
 
     function openSettings() {
         // Created on demand so Qt Quick Controls is only loaded when the window is used.

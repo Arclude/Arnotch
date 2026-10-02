@@ -9,6 +9,8 @@ fn main() {
         "qml/Face.qml",
         "qml/SessionRow.qml",
         "qml/ActivityCard.qml",
+        "qml/TerminalsView.qml",
+        "qml/IconButton.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

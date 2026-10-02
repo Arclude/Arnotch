@@ -40,8 +40,20 @@ and on X11. GNOME does not support layer-shell yet.
 cargo build --release
 ./target/release/notch &
 ./target/release/notchctl notify "Hello" "from the notch"
+./target/release/notchctl open terminals   # or: open activity, close
 ./target/release/notchctl settings
+./target/release/notchctl terminals        # list open terminals as JSON
 ```
+
+## Terminals
+
+The *Terminals* tab lists every open terminal tab with the command running in it, its folder,
+running time and CPU use. You can stop a command (Ctrl+C, press again to terminate) or jump to
+its terminal window. Commands that ran for 10 seconds or more announce when they finish.
+
+It reads `/proc`, so it works with any terminal emulator (Konsole, kitty, WezTerm, Alacritty,
+foot, GNOME Terminal, ...) and inside tmux. Jumping to a window is supported on KDE Plasma,
+Hyprland and Sway.
 
 ## Settings
 

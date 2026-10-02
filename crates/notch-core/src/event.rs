@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::terminals::Terminal;
+
 /// Everything the notch can display. Sent over the socket as one JSON object per line.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -20,6 +22,16 @@ pub enum Event {
     },
     /// Ask the notch to show its settings window.
     OpenSettings,
+    /// Open the island, optionally on a tab ("activity", "terminals").
+    Open {
+        #[serde(default)]
+        tab: Option<String>,
+    },
+    /// Close the island.
+    Close,
+    /// The open terminals, published by the notch itself (never accepted from clients).
+    #[serde(skip_deserializing)]
+    Terminals { terminals: Vec<Terminal> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

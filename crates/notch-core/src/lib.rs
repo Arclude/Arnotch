@@ -4,6 +4,8 @@
 pub mod claude;
 pub mod diff;
 pub mod event;
+pub mod focus;
 pub mod ipc;
+pub mod terminals;
 
 pub use event::{AgentPhase, Event};
