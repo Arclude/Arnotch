@@ -18,7 +18,9 @@ Window {
     LayerShell.Window.layer: LayerShell.Window.LayerOverlay
     // -1 ignores other panels' reserved space (sits over a top panel), 0 respects it (sits below).
     LayerShell.Window.exclusionZone: settings.panelMode === "below" ? 0 : -1
-    LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityNone
+    // The island takes the keyboard only while a text field is open.
+    LayerShell.Window.keyboardInteractivity: wantsKeyboard ? LayerShell.Window.KeyboardInteractivityOnDemand
+                                                           : LayerShell.Window.KeyboardInteractivityNone
     LayerShell.Window.wantsToBeOnActiveScreen: targetScreen === null
 
     Binding on screen {
@@ -45,6 +47,18 @@ Window {
     readonly property int expandedWidth: shownTab === "terminals" ? 540 : showCard ? 640 : 470
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
+    readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.replying)
+    onWantsKeyboardChanged: if (wantsKeyboard) requestActivate()
+
+    // The terminal running the focused Claude session, to send replies to.
+    readonly property string replyTerminalId: {
+        const session = notch.focus
+        if (!session || !session.cwd)
+            return ""
+        const match = notch.terminals.find(t => t.can_send && t.command && t.command.name === "claude" && t.cwd === session.cwd)
+        return match ? match.id : ""
+    }
+
     // Opened by a click; closed by another click or when the pointer leaves.
     property bool opened: false
     readonly property bool expanded: opened
@@ -60,7 +74,7 @@ Window {
     x: Screen.virtualX + (Screen.width - width) / 2
     y: Screen.virtualY
     color: "transparent"
-    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | (wantsKeyboard ? 0 : Qt.WindowDoesNotAcceptFocus)
     visible: true
 
     // Keeps the island open briefly after the pointer leaves, so it doesn't flicker.
@@ -123,7 +137,7 @@ Window {
             onHoveredChanged: {
                 if (hovered)
                     closeDelay.stop()
-                else if (root.opened)
+                else if (root.opened && !root.wantsKeyboard)
                     closeDelay.restart()
             }
         }
@@ -245,6 +259,7 @@ Window {
             }
 
             TerminalsView {
+                id: terminalsView
                 width: parent.width
                 visible: root.shownTab === "terminals"
                 terminals: root.notch.terminals
@@ -253,7 +268,10 @@ Window {
             }
 
             ActivityCard {
+                id: activityCard
                 width: parent.width
+                replyTerminalId: root.replyTerminalId
+                onReplied: text => root.bridge.sendText(root.replyTerminalId, text)
                 visible: root.showCard
                 session: root.notch.focus ?? ({})
                 mood: root.notch.mood

@@ -88,6 +88,7 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
     Ok(Some(Event::Agent {
         session_id: input.session_id,
         project,
+        cwd: input.cwd,
         phase,
     }))
 }
@@ -270,6 +271,7 @@ mod tests {
             Event::Agent {
                 session_id: "abc".into(),
                 project: "korus".into(),
+                cwd: "/home/me/projects/korus".into(),
                 phase: AgentPhase::Tool {
                     tool: "Read".into(),
                     detail: "invoice.ts".into(),
@@ -421,6 +423,7 @@ mod tests {
         let event = Event::Agent {
             session_id: "abc".into(),
             project: "korus".into(),
+            cwd: String::new(),
             phase: AgentPhase::Done,
         };
         assert_eq!(

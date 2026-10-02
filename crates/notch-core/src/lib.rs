@@ -2,6 +2,7 @@
 //! adapters that turn third-party payloads (Claude Code hooks, ...) into events.
 
 pub mod claude;
+pub mod control;
 pub mod diff;
 pub mod event;
 pub mod focus;

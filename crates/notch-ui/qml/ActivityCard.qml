@@ -20,8 +20,18 @@ Item {
 
     // "allow", "deny" or "ask" (answer in the terminal)
     signal answered(string decision)
+    signal replied(string text)
 
-    implicitHeight: Math.max(sidebar.implicitHeight, panel.implicitHeight)
+    // Terminal of this Claude session, empty when replies can't be typed into it.
+    property string replyTerminalId: ""
+    // Claude waits for the user (a question or its next prompt): offer to reply.
+    readonly property bool canReply: replyTerminalId !== "" && !permission
+                                     && (session.phase === "waiting" || session.phase === "done")
+    property bool replying: false
+    onCanReplyChanged: if (!canReply) replying = false
+
+    implicitHeight: Math.max(sidebar.implicitHeight,
+                             panel.implicitHeight + (replyArea.visible ? replyArea.implicitHeight + (panel.visible ? 8 : 0) : 0))
 
     Column {
         id: sidebar
@@ -290,6 +300,39 @@ Item {
                     onClicked: card.answered("ask")
                 }
             }
+        }
+    }
+
+    // Reply to Claude: typed into its terminal
+    Item {
+        id: replyArea
+
+        anchors.left: sidebar.right
+        anchors.leftMargin: 12
+        anchors.right: parent.right
+        y: panel.visible ? panel.implicitHeight + 8 : 0
+        visible: card.canReply
+        implicitHeight: card.replying ? replyField.height : replyButton.height
+
+        PillButton {
+            id: replyButton
+            visible: !card.replying
+            text: card.session.phase === "done" ? qsTr("Send next prompt") : qsTr("Reply to Claude")
+            tint: "#4c8dff"
+            onClicked: card.replying = true
+        }
+
+        SendField {
+            id: replyField
+            width: parent.width
+            visible: card.replying
+            placeholder: qsTr("Message to Claude…")
+            onVisibleChanged: if (visible) focusInput()
+            onSubmitted: text => {
+                card.replied(text)
+                card.replying = false
+            }
+            onCancelled: card.replying = false
         }
     }
 }

@@ -8,7 +8,7 @@ use std::sync::{Mutex, OnceLock};
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
 use notch_core::terminals::{self, Terminal};
-use notch_core::{Decision, Event, focus, ipc};
+use notch_core::{Decision, Event, control, focus, ipc};
 use tokio::sync::broadcast;
 
 #[cxx_qt::bridge]
@@ -45,10 +45,15 @@ pub mod qobject {
         #[cxx_name = "setTerminalsVisible"]
         fn set_terminals_visible(self: &NotchBridge, visible: bool);
 
-        /// Brings the terminal emulator's window to the front.
+        /// Brings a terminal's window to the front and selects its tab.
         #[qinvokable]
         #[cxx_name = "focusTerminal"]
-        fn focus_terminal(self: &NotchBridge, app_pid: u32);
+        fn focus_terminal(self: &NotchBridge, id: &QString);
+
+        /// Types `text` into a terminal and presses Enter.
+        #[qinvokable]
+        #[cxx_name = "sendText"]
+        fn send_text(self: &NotchBridge, id: &QString, text: &QString);
     }
 
     impl cxx_qt::Threading for NotchBridge {}
@@ -106,18 +111,46 @@ impl qobject::NotchBridge {
         TERMINALS_VISIBLE.store(visible, Ordering::Relaxed);
     }
 
-    pub fn focus_terminal(&self, app_pid: u32) {
-        // Talks to the compositor through other processes; keep the UI thread free.
-        std::thread::spawn(move || {
-            if let Err(err) = focus::focus_window(app_pid) {
-                tracing::warn!("cannot focus window of {app_pid}: {err:#}");
-                _ = event_bus().send(Event::Notify {
-                    title: "Can't switch to the terminal".into(),
-                    body: err.to_string(),
-                });
-            }
+    pub fn focus_terminal(&self, id: &QString) {
+        with_terminal(id, "Can't switch to the terminal", |terminal| {
+            control::focus_tab(terminal)
+                // A tab we can't select still has a window we can raise.
+                .or_else(|_| focus::focus_window(terminal.app_pid))
         });
     }
+
+    pub fn send_text(&self, id: &QString, text: &QString) {
+        let text = text.to_string();
+        with_terminal(id, "Can't type into the terminal", move |terminal| {
+            control::send_text(terminal, &text, true)
+        });
+    }
+}
+
+/// Runs `action` on a background thread (it talks to other processes) for the terminal
+/// with this id, reporting failures in the island.
+fn with_terminal(
+    id: &QString,
+    failure: &'static str,
+    action: impl FnOnce(&Terminal) -> anyhow::Result<()> + Send + 'static,
+) {
+    let id = id.to_string();
+    let terminal = match TERMINALS.lock().unwrap().as_ref() {
+        Some(Event::Terminals { terminals }) => terminals.iter().find(|t| t.id == id).cloned(),
+        _ => None,
+    };
+    std::thread::spawn(move || {
+        let result = terminal
+            .ok_or_else(|| anyhow::anyhow!("terminal {id} is gone"))
+            .and_then(|terminal| action(&terminal));
+        if let Err(err) = result {
+            tracing::warn!("{failure} ({id}): {err:#}");
+            _ = event_bus().send(Event::Notify {
+                title: failure.into(),
+                body: format!("{err:#}"),
+            });
+        }
+    });
 }
 
 impl cxx_qt::Initialize for qobject::NotchBridge {

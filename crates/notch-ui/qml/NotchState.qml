@@ -139,7 +139,9 @@ QtObject {
     }
 
     function updateDetails(id, ev) {
-        const d = details[id] ?? { prompt: "", steps: [], view: "", diff: null, command: "", output: [], result: "" }
+        const d = details[id] ?? { prompt: "", steps: [], view: "", diff: null, command: "", output: [], result: "", cwd: "" }
+        if (ev.cwd)
+            d.cwd = ev.cwd
 
         if (ev.phase === "permission") {
             d.permission = { request_id: ev.request_id, tool: ev.tool, detail: ev.detail, diff: ev.diff ?? null }

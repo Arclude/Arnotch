@@ -12,6 +12,7 @@ fn main() {
         "qml/TerminalsView.qml",
         "qml/IconButton.qml",
         "qml/PillButton.qml",
+        "qml/SendField.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

@@ -17,6 +17,9 @@ pub enum Event {
         session_id: String,
         /// Short project name, usually the basename of the working directory.
         project: String,
+        /// The agent's working directory, used to find its terminal.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        cwd: String,
         #[serde(flatten)]
         phase: AgentPhase,
     },

@@ -55,6 +55,19 @@ It reads `/proc`, so it works with any terminal emulator (Konsole, kitty, WezTer
 foot, GNOME Terminal, ...) and inside tmux. Jumping to a window is supported on KDE Plasma,
 Hyprland and Sway.
 
+Typing into a terminal (✎) and selecting the exact tab use the terminal's own remote control,
+so they need a supported terminal:
+
+| Terminal | Setup |
+|---|---|
+| Konsole | Settings › Configure Konsole › General › *Enable the security sensitive parts of the DBus API* |
+| tmux | none |
+| WezTerm | none (`wezterm cli`) |
+| kitty | `allow_remote_control yes` and `listen_on unix:@kitty-{kitty_pid}` in `kitty.conf` (or set `NOTCH_KITTY_SOCKET`) |
+
+When Claude waits for you, the activity card offers *Reply to Claude*, which types your message
+into the terminal running that Claude session.
+
 ## Settings
 
 Open them from the tray icon (or `notchctl settings`). Stored in `~/.config/notch/notch.conf`.

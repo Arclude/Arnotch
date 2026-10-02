@@ -93,6 +93,8 @@ pub struct Terminal {
     pub shell: String,
     pub cwd: String,
     pub command: Option<Command>,
+    /// Text can be typed into this terminal (see [`crate::control`]).
+    pub can_send: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -187,6 +189,7 @@ impl Scanner {
                 let cwd_pid = command.as_ref().map_or(shell.pid, |c| c.pgid);
                 Terminal {
                     id: pty_name(shell.tty_nr),
+                    can_send: crate::control::can_send(&app),
                     app,
                     app_pid,
                     shell_pid: shell.pid as u32,
@@ -326,6 +329,26 @@ fn find_app(shell: &Proc, by_pid: &HashMap<i32, &Proc>) -> (String, u32) {
         pid = p.ppid;
     }
     ("Terminal".into(), 0)
+}
+
+/// The terminal emulator that process `pid` runs in, read straight from `/proc`.
+pub fn terminal_app_of(pid: i32) -> Option<(String, u32)> {
+    let mut by_pid = HashMap::new();
+    let mut next = pid;
+    for _ in 0..16 {
+        let proc = parse_stat(&fs::read_to_string(format!("/proc/{next}/stat")).ok()?)?;
+        next = proc.ppid;
+        by_pid.insert(proc.pid, proc);
+        if next <= 1 {
+            break;
+        }
+    }
+    let start = by_pid.get(&pid)?.clone();
+    let refs = by_pid.iter().map(|(pid, p)| (*pid, p)).collect();
+    match find_app(&start, &refs) {
+        (_, 0) => None,
+        found => Some(found),
+    }
 }
 
 /// "pts/3" from a `tty_nr` (major 136..=143 are Unix98 ptys).
