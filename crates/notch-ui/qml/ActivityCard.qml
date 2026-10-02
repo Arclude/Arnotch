@@ -10,8 +10,16 @@ Item {
     required property string mood
     required property color moodColor
 
+    // A pending permission request takes over the panel until it is answered.
+    readonly property var permission: session.permission ?? null
+    readonly property string mode: permission ? (permission.diff ? "diff" : "ask") : (session.view ?? "")
+    readonly property var shownDiff: permission ? permission.diff : session.diff
+
     readonly property int maxDiffLines: 10
-    readonly property var diffLines: session.diff ? session.diff.lines.slice(0, maxDiffLines) : []
+    readonly property var diffLines: shownDiff ? shownDiff.lines.slice(0, maxDiffLines) : []
+
+    // "allow", "deny" or "ask" (answer in the terminal)
+    signal answered(string decision)
 
     implicitHeight: Math.max(sidebar.implicitHeight, panel.implicitHeight)
 
@@ -110,11 +118,11 @@ Item {
         anchors.left: sidebar.right
         anchors.leftMargin: 12
         anchors.right: parent.right
-        visible: card.session.view !== ""
+        visible: card.mode !== ""
         implicitHeight: visible ? panelContent.implicitHeight + 16 : 0
         radius: 12
         color: "#14161b"
-        border.color: "#12ffffff"
+        border.color: card.permission ? "#80ffb020" : "#12ffffff"
         border.width: 1
 
         Column {
@@ -137,7 +145,9 @@ Item {
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
-                    text: card.session.view === "diff" ? card.session.diff.file : "$ " + card.session.command
+                    text: card.permission ? qsTr("Allow %1?").arg(card.permission.tool) + (card.mode === "diff" ? "  " + card.shownDiff.file : "")
+                        : card.mode === "diff" ? card.shownDiff.file
+                        : "$ " + card.session.command
                     color: "#c9ccd2"
                     font.pixelSize: 11
                     font.family: "monospace"
@@ -147,7 +157,7 @@ Item {
                     id: status
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: card.session.view === "terminal"
+                    visible: card.mode === "terminal" && !card.permission
                     text: card.session.result === "ok" ? qsTr("✓ done")
                         : card.session.result === "fail" ? qsTr("✗ failed")
                         : qsTr("running…")
@@ -161,7 +171,7 @@ Item {
             // Diff lines
             Column {
                 width: parent.width
-                visible: card.session.view === "diff"
+                visible: card.mode === "diff"
 
                 Repeater {
                     model: card.diffLines
@@ -206,7 +216,7 @@ Item {
                 }
 
                 Text {
-                    visible: card.session.diff && (card.session.diff.truncated || card.session.diff.lines.length > card.maxDiffLines)
+                    visible: card.shownDiff && (card.shownDiff.truncated || card.shownDiff.lines.length > card.maxDiffLines)
                     leftPadding: 32
                     text: "⋯"
                     color: "#5c616b"
@@ -217,7 +227,7 @@ Item {
             // Command output
             Column {
                 width: parent.width
-                visible: card.session.view === "terminal"
+                visible: card.mode === "terminal"
 
                 Repeater {
                     model: card.session.output
@@ -242,6 +252,42 @@ Item {
                     color: "#5c616b"
                     font.pixelSize: 11
                     font.family: "monospace"
+                }
+            }
+
+            // The command or request to approve
+            Text {
+                width: parent.width
+                visible: card.mode === "ask"
+                text: card.permission ? (card.permission.tool === "Bash" ? "$ " : "") + card.permission.detail : ""
+                wrapMode: Text.WrapAnywhere
+                maximumLineCount: 4
+                elide: Text.ElideRight
+                color: "#f2f3f5"
+                font.pixelSize: 11
+                font.family: "monospace"
+            }
+
+            Row {
+                visible: card.permission !== null
+                spacing: 6
+                topPadding: 2
+
+                PillButton {
+                    text: qsTr("Allow")
+                    tint: "#34c759"
+                    filled: true
+                    onClicked: card.answered("allow")
+                }
+                PillButton {
+                    text: qsTr("Deny")
+                    tint: "#ff5f57"
+                    onClicked: card.answered("deny")
+                }
+                PillButton {
+                    text: qsTr("Ask in terminal")
+                    tint: "#8b909a"
+                    onClicked: card.answered("ask")
                 }
             }
         }

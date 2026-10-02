@@ -29,9 +29,14 @@ pub enum Event {
     },
     /// Close the island.
     Close,
+    /// Answer the most recent pending permission request.
+    Answer { decision: Decision },
     /// The open terminals, published by the notch itself (never accepted from clients).
     #[serde(skip_deserializing)]
     Terminals { terminals: Vec<Terminal> },
+    /// A permission request was answered or abandoned; published by the notch itself.
+    #[serde(skip_deserializing)]
+    PermissionClosed { request_id: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -57,6 +62,15 @@ pub enum AgentPhase {
         /// The last lines of the tool's output (commands only).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         output: Vec<String>,
+    },
+    /// The agent asks to run a tool. The client waits on its connection for one line
+    /// with a [`Decision`].
+    Permission {
+        request_id: String,
+        tool: String,
+        detail: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diff: Option<Diff>,
     },
     /// The agent needs the user (permission prompt, idle input, ...).
     Waiting { message: String },
@@ -98,4 +112,14 @@ impl Event {
         line.push('\n');
         line
     }
+}
+
+/// The user's answer to an [`AgentPhase::Permission`] request.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Decision {
+    Allow,
+    Deny,
+    /// Let the agent ask in its terminal as usual.
+    Ask,
 }

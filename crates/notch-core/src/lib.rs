@@ -8,4 +8,4 @@ pub mod focus;
 pub mod ipc;
 pub mod terminals;
 
-pub use event::{AgentPhase, Event};
+pub use event::{AgentPhase, Decision, Event};

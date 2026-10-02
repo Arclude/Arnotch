@@ -11,6 +11,7 @@ fn main() {
         "qml/ActivityCard.qml",
         "qml/TerminalsView.qml",
         "qml/IconButton.qml",
+        "qml/PillButton.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

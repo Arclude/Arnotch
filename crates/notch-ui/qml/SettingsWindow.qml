@@ -9,7 +9,7 @@ ApplicationWindow {
 
     title: qsTr("Notch Settings")
     width: 520
-    height: 420
+    height: 460
     minimumWidth: 420
     minimumHeight: 300
 
@@ -94,6 +94,13 @@ ApplicationWindow {
                 text: qsTr("Open the island on new events")
                 checked: win.settings.autoExpand
                 onToggled: win.settings.autoExpand = checked
+            }
+
+            Label { text: qsTr("Permissions") }
+            Switch {
+                text: qsTr("Answer Claude's permission requests here")
+                checked: win.settings.permissionPrompts
+                onToggled: win.settings.permissionPrompts = checked
             }
 
             Label { text: qsTr("Live activity") }

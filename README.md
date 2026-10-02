@@ -78,6 +78,11 @@ into `~/.claude/settings.json`. Every Claude Code session will then show up in t
 with its recent steps, a live diff of each file edit and the output of commands such as test runs.
 The hook takes about 1 ms and never fails or blocks, even when the notch is not running.
 
+When Claude asks for permission, the island shows the command or diff with **Allow**, **Deny** and
+**Ask in terminal** buttons. `notchctl answer allow|deny|ask` answers the latest request, which is
+handy on a global shortcut. Without an answer within 45 seconds (`NOTCH_PERMISSION_TIMEOUT`), or
+when the notch is not running, Claude Code simply asks in the terminal as usual.
+
 ## License
 
 MIT

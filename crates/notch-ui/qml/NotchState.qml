@@ -34,6 +34,9 @@ QtObject {
     property bool notifying: false
     property string time: Qt.formatTime(new Date(), "HH:mm")
 
+    // Claude asked for permission; Main switches the islands to the activity tab.
+    signal permissionRequested(string requestId)
+
     // True while a new event wants the islands to open on their own.
     readonly property bool alerting: alertTimer.running
     // Like `alerting`, but for live activity (diffs, commands), which users may turn off.
@@ -45,6 +48,8 @@ QtObject {
                                   : "idle"
 
     readonly property int maxSteps: 5
+    // Matches notchctl's default wait before Claude Code falls back to the terminal.
+    readonly property int permissionTimeout: 45000
 
     function indexOf(sessionId) {
         for (let i = 0; i < sessions.count; i++) {
@@ -68,6 +73,8 @@ QtObject {
         if (ev.type === "notify") {
             say(ev.title, ev.body, 5000)
             notifying = true
+        } else if (ev.type === "permission_closed") {
+            closePermission(ev.request_id)
         } else if (ev.type === "terminals") {
             terminals = ev.terminals
         } else if (ev.type === "agent") {
@@ -92,7 +99,8 @@ QtObject {
         }
 
         // A tool result keeps the session in its "tool" phase: the agent carries on.
-        const phase = ev.phase === "tool_result" ? "tool" : ev.phase
+        // A permission request is a way of waiting for the user.
+        const phase = ev.phase === "tool_result" ? "tool" : ev.phase === "permission" ? "waiting" : ev.phase
         const row = {
             sessionId: id,
             project: ev.project || "?",
@@ -118,6 +126,9 @@ QtObject {
             say(ev.project, qsTr("Finished"), 4000)
         } else if (ev.phase === "waiting") {
             say(ev.project, ev.message || qsTr("Needs your attention"), 6000)
+        } else if (ev.phase === "permission") {
+            say(ev.project, qsTr("Wants to run %1").arg(ev.tool), permissionTimeout)
+            permissionRequested(ev.request_id)
         } else if (ev.phase === "started") {
             headline = ev.project
             subline = ev.prompt || qsTr("Thinking…")
@@ -130,7 +141,9 @@ QtObject {
     function updateDetails(id, ev) {
         const d = details[id] ?? { prompt: "", steps: [], view: "", diff: null, command: "", output: [], result: "" }
 
-        if (ev.phase === "started") {
+        if (ev.phase === "permission") {
+            d.permission = { request_id: ev.request_id, tool: ev.tool, detail: ev.detail, diff: ev.diff ?? null }
+        } else if (ev.phase === "started") {
             d.prompt = ev.prompt || ""
             d.steps = []
             d.view = ""
@@ -174,6 +187,22 @@ QtObject {
         alertTimer.stop()
         activityTimer.stop()
         notifying = false
+    }
+
+    // The request was answered (here or by timing out); drop its buttons.
+    function closePermission(requestId) {
+        for (const id in details) {
+            const d = details[id]
+            if (d.permission && d.permission.request_id === requestId) {
+                d.permission = null
+                const index = indexOf(id)
+                if (index >= 0 && sessions.get(index).phase === "waiting")
+                    sessions.setProperty(index, "phase", "tool")
+                alertTimer.stop()
+                sessions.revision++
+                focusRevision++
+            }
+        }
     }
 
     function say(title, body, duration) {

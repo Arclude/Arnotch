@@ -3,6 +3,8 @@
 //!   notchctl notify <title> [body]   show a message
 //!   notchctl open [tab]              open the island (tabs: activity, terminals)
 //!   notchctl close                   close the island
+//!   notchctl answer <decision>       answer Claude's latest permission request
+//!                                    (allow, deny, ask)
 //!   notchctl settings                open the settings window
 //!   notchctl terminals               list open terminals and what runs in them
 //!   notchctl claude-hook             forward a Claude Code hook payload read from stdin
@@ -10,13 +12,15 @@
 
 use std::io::Read;
 use std::process::ExitCode;
+use std::time::Duration;
 
-use notch_core::{Event, claude, ipc};
+use notch_core::{AgentPhase, Event, claude, ipc};
 
 const USAGE: &str = "usage:
   notchctl notify <title> [body]
   notchctl open [activity|terminals]
   notchctl close
+  notchctl answer allow|deny|ask
   notchctl settings
   notchctl terminals
   notchctl claude-hook        (reads the hook JSON from stdin)
@@ -35,6 +39,13 @@ fn main() -> ExitCode {
             tab: rest.first().map(|tab| (*tab).to_owned()),
         }),
         ["close"] => send(&Event::Close),
+        ["answer", decision] => match serde_json::from_value(serde_json::json!(decision)) {
+            Ok(decision) => send(&Event::Answer { decision }),
+            Err(_) => {
+                eprintln!("notchctl: the answer must be allow, deny or ask");
+                ExitCode::from(2)
+            }
+        },
         ["settings"] => send(&Event::OpenSettings),
         ["terminals"] => {
             let (terminals, _) = notch_core::terminals::Scanner::new().scan();
@@ -78,8 +89,34 @@ fn claude_hook() -> ExitCode {
     if std::io::stdin().read_to_string(&mut input).is_err() {
         return ExitCode::SUCCESS;
     }
-    if let Ok(Some(event)) = claude::event_from_hook(&input) {
+    let Ok(Some(event)) = claude::event_from_hook(&input) else {
+        return ExitCode::SUCCESS;
+    };
+
+    if let Event::Agent {
+        phase: AgentPhase::Permission { .. },
+        ..
+    } = event
+    {
+        // Wait for the user to answer in the island. Without an answer, print nothing:
+        // Claude Code then asks in the terminal as usual.
+        if let Ok(Some(decision)) = ipc::request(&event, permission_timeout())
+            && let Some(output) = claude::permission_output(decision)
+        {
+            println!("{output}");
+        }
+    } else {
         _ = ipc::send(&event);
     }
     ExitCode::SUCCESS
+}
+
+/// How long a permission request waits in the island before falling back to the terminal.
+/// `NOTCH_PERMISSION_TIMEOUT` (seconds) overrides the default of 45.
+fn permission_timeout() -> Duration {
+    let secs = std::env::var("NOTCH_PERMISSION_TIMEOUT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(45);
+    Duration::from_secs(secs)
 }

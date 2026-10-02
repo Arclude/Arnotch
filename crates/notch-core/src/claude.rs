@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::diff;
-use crate::event::{AgentPhase, Diff, Event};
+use crate::event::{AgentPhase, Decision, Diff, Event};
 
 /// How many lines of command output the island shows.
 const OUTPUT_LINES: usize = 6;
@@ -31,6 +31,8 @@ struct HookInput {
     message: Option<String>,
     #[serde(default)]
     prompt: Option<String>,
+    #[serde(default)]
+    tool_use_id: Option<String>,
 }
 
 /// Returns `None` for hook events the notch does not care about.
@@ -61,6 +63,15 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
             output: tail(&text_of(&input.error)),
             tool,
         },
+        "PermissionRequest" => AgentPhase::Permission {
+            request_id: input
+                .tool_use_id
+                .clone()
+                .unwrap_or_else(|| format!("{}-{}", input.session_id, std::process::id())),
+            detail: tool_detail(&tool, &input.tool_input),
+            diff: file_diff(&tool, &input.tool_input),
+            tool,
+        },
         "Notification" => AgentPhase::Waiting {
             message: input.message.unwrap_or_default(),
         },
@@ -79,6 +90,28 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
         project,
         phase,
     }))
+}
+
+/// What the hook prints so Claude Code applies the user's decision.
+/// `None` lets Claude Code ask in the terminal as usual.
+pub fn permission_output(decision: Decision) -> Option<String> {
+    let decision = match decision {
+        Decision::Allow => serde_json::json!({ "behavior": "allow" }),
+        Decision::Deny => serde_json::json!({
+            "behavior": "deny",
+            "message": "Denied from the notch",
+        }),
+        Decision::Ask => return None,
+    };
+    Some(
+        serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PermissionRequest",
+                "decision": decision,
+            }
+        })
+        .to_string(),
+    )
 }
 
 /// A one-line, human readable summary of what a tool call is about.
@@ -335,6 +368,39 @@ mod tests {
                 output: vec!["Command failed with exit code 1".into()],
             }
         );
+    }
+
+    #[test]
+    fn permission_requests_carry_the_tool_use_id() {
+        let json = r#"{
+            "session_id": "abc",
+            "cwd": "/p/korus",
+            "hook_event_name": "PermissionRequest",
+            "tool_name": "Bash",
+            "tool_input": { "command": "rm -rf /tmp/build" },
+            "tool_use_id": "toolu_01"
+        }"#;
+        assert_eq!(
+            phase(json),
+            AgentPhase::Permission {
+                request_id: "toolu_01".into(),
+                tool: "Bash".into(),
+                detail: "rm -rf /tmp/build".into(),
+                diff: None,
+            }
+        );
+    }
+
+    #[test]
+    fn decisions_become_hook_output() {
+        let allow: Value =
+            serde_json::from_str(&permission_output(Decision::Allow).unwrap()).unwrap();
+        assert_eq!(
+            allow["hookSpecificOutput"]["hookEventName"],
+            "PermissionRequest"
+        );
+        assert_eq!(allow["hookSpecificOutput"]["decision"]["behavior"], "allow");
+        assert_eq!(permission_output(Decision::Ask), None);
     }
 
     #[test]

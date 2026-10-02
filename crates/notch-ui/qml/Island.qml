@@ -40,7 +40,8 @@ Window {
     readonly property bool onActivity: shownTab === "activity"
 
     // Show the detailed activity card instead of the headline.
-    readonly property bool showCard: onActivity && notch.focus !== null && notch.focus.steps.length > 0 && !notch.notifying
+    readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying
+                                     && (notch.focus.steps.length > 0 || !!notch.focus.permission)
     readonly property int expandedWidth: shownTab === "terminals" ? 540 : showCard ? 640 : 470
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
@@ -257,6 +258,11 @@ Window {
                 session: root.notch.focus ?? ({})
                 mood: root.notch.mood
                 moodColor: root.moodColor
+                onAnswered: decision => {
+                    const requestId = root.notch.focus.permission.request_id
+                    root.bridge.answerPermission(requestId, decision)
+                    root.notch.closePermission(requestId)
+                }
             }
 
             Row {

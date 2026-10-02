@@ -8,7 +8,7 @@ use std::sync::{Mutex, OnceLock};
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
 use notch_core::terminals::{self, Terminal};
-use notch_core::{Event, focus};
+use notch_core::{Decision, Event, focus, ipc};
 use tokio::sync::broadcast;
 
 #[cxx_qt::bridge]
@@ -34,6 +34,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "interruptCommand"]
         fn interrupt_command(self: &NotchBridge, shell_pid: u32) -> bool;
+
+        /// Answers a pending permission request: "allow", "deny" or "ask".
+        #[qinvokable]
+        #[cxx_name = "answerPermission"]
+        fn answer_permission(self: &NotchBridge, request_id: &QString, decision: &QString) -> bool;
 
         /// Tells the notch whether a terminal list is on screen, to rescan more often.
         #[qinvokable]
@@ -86,6 +91,15 @@ impl qobject::NotchBridge {
                 false
             }
         }
+    }
+
+    pub fn answer_permission(&self, request_id: &QString, decision: &QString) -> bool {
+        let decision = match decision.to_string().as_str() {
+            "allow" => Decision::Allow,
+            "deny" => Decision::Deny,
+            _ => Decision::Ask,
+        };
+        ipc::answer(&request_id.to_string(), decision)
     }
 
     pub fn set_terminals_visible(&self, visible: bool) {

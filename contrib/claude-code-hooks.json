@@ -1,11 +1,12 @@
 {
   "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }],
-    "PreToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }],
-    "PostToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }],
-    "PostToolUseFailure": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }],
-    "Notification": [{ "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }],
-    "Stop": [{ "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "notchctl claude-hook" }] }]
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "notchctl claude-hook"}]}],
+    "PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "notchctl claude-hook"}]}],
+    "PermissionRequest": [{"matcher": "*", "hooks": [{"type": "command", "command": "notchctl claude-hook", "timeout": 60}]}],
+    "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "notchctl claude-hook"}]}],
+    "PostToolUseFailure": [{"matcher": "*", "hooks": [{"type": "command", "command": "notchctl claude-hook"}]}],
+    "Notification": [{"hooks": [{"type": "command", "command": "notchctl claude-hook"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "notchctl claude-hook"}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "notchctl claude-hook"}]}]
   }
 }

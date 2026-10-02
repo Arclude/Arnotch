@@ -17,11 +17,22 @@ QtObject {
         // Height of the closed island; best set to the top panel's height
         property int height: 30
         property bool autoExpand: true
+        // Answer Claude Code's permission requests from the island
+        property bool permissionPrompts: true
         // Briefly open the island to show diffs and command output
         property bool liveActivity: true
     }
 
-    property NotchState state: NotchState {}
+    property NotchState state: NotchState {
+        onPermissionRequested: requestId => {
+            if (!app.settings.permissionPrompts) {
+                app.bridge.answerPermission(requestId, "ask")
+                return
+            }
+            for (let i = 0; i < app.islands.count; i++)
+                app.islands.objectAt(i).tab = "activity"
+        }
+    }
 
     property NotchBridge bridge: NotchBridge {
         onEventReceived: json => {
