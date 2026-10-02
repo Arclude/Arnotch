@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/notch-core", "crates/notch-ui", "crates/notchctl"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/toygar-m/linux-ai"
+
+[workspace.dependencies]
+notch-core = { path = "crates/notch-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "net", "io-util", "macros", "sync", "fs"] }
+anyhow = "1"
+libc = "0.2"
+similar = "3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

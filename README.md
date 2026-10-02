@@ -1,1 +1,71 @@
-# linux-ai
+# linux-ai — notch
+
+A Dynamic-Island-style assistant for the Linux desktop. A small island with a robot face
+lives at the top center of the screen, and it expands to show what your coding agents
+(Claude Code, ...) and scripts are doing.
+
+![states: collapsed, working, waiting, done]
+
+## Architecture
+
+```
+crates/
+  notch-core/   event protocol, Unix socket IPC, Claude Code hook adapter
+  notch-ui/     the island: Rust (cxx-qt) + QML, placed with wlr-layer-shell, tray icon, settings
+  notchctl/     CLI that sends events to the island (used by hooks and scripts)
+```
+
+Clients write newline-delimited JSON events to `$XDG_RUNTIME_DIR/notch.sock`:
+
+```json
+{"type":"notify","title":"Backup","body":"Finished in 42s"}
+{"type":"agent","session_id":"abc","project":"korus","phase":"tool","tool":"Edit","detail":"invoice.ts"}
+```
+
+Agent phases: `started`, `tool` (optionally with a `diff`), `tool_result` (with `ok` and the
+command's last `output` lines), `waiting`, `done`, `ended`.
+
+## Requirements
+
+- Rust (stable)
+- Qt 6 (`qt6-base`, `qt6-declarative`)
+- [LayerShellQt](https://invent.kde.org/plasma/layer-shell-qt) (`layer-shell-qt`) for Wayland
+
+Works on Wayland compositors with `wlr-layer-shell` (KDE Plasma, Hyprland, Sway, niri, COSMIC)
+and on X11. GNOME does not support layer-shell yet.
+
+## Build and run
+
+```sh
+cargo build --release
+./target/release/notch &
+./target/release/notchctl notify "Hello" "from the notch"
+./target/release/notchctl settings
+```
+
+## Settings
+
+Open them from the tray icon (or `notchctl settings`). Stored in `~/.config/notch/notch.conf`.
+
+- **Show on**: the active screen (follows focus), all screens, or one specific monitor.
+- **Top panel**: on a screen with a top panel, the island can sit *over* the panel (covering
+  its center, e.g. the clock) or *below* it.
+- **Clock**: show the time inside the island, handy when it replaces the panel's clock.
+- **Events**: open the island automatically when something happens.
+
+## Performance
+
+The island uses Qt's software renderer by default: for a surface this small it needs about half
+the memory of a GPU context (≈22 MB PSS) and stays around 0.1% CPU when idle. Animations only run
+while they are visible. Set `NOTCH_RENDERER=gpu` to use the GPU instead.
+
+## Claude Code integration
+
+Put `notchctl` on your `PATH` and merge [`contrib/claude-code-hooks.json`](contrib/claude-code-hooks.json)
+into `~/.claude/settings.json`. Every Claude Code session will then show up in the island,
+with its recent steps, a live diff of each file edit and the output of commands such as test runs.
+The hook takes about 1 ms and never fails or blocks, even when the notch is not running.
+
+## License
+
+MIT
