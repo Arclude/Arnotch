@@ -28,8 +28,16 @@ QtObject {
     property string headline: qsTr("All quiet")
     property string subline: ""
     property bool happy: false
-    // [{ id, app, app_pid, shell_pid, shell, cwd, command: { pgid, name, args, started_at, cpu } | null }]
+    // [{ id, app, app_pid, shell_pid, shell, cwd, command: { pgid, name, args, started_at, cpu } | null, can_send }]
     property var terminals: []
+    // Terminals running Claude Code that files can be sent to.
+    readonly property var claudeTerminals: terminals.filter(t => t.can_send && t.command && t.command.name === "claude")
+
+    // Paths of the files kept on the shelf; Main persists them.
+    property var shelf: []
+    // Files being shared: [{ id, file, progress, state }]
+    property var uploads: []
+    readonly property bool uploading: uploads.length > 0
     // A plain notification is on screen; it takes precedence over the activity card.
     property bool notifying: false
     property string time: Qt.formatTime(new Date(), "HH:mm")
@@ -73,6 +81,8 @@ QtObject {
         if (ev.type === "notify") {
             say(ev.title, ev.body, 5000)
             notifying = true
+        } else if (ev.type === "upload") {
+            handleUpload(ev)
         } else if (ev.type === "permission_closed") {
             closePermission(ev.request_id)
         } else if (ev.type === "terminals") {
@@ -189,6 +199,38 @@ QtObject {
         alertTimer.stop()
         activityTimer.stop()
         notifying = false
+    }
+
+    function handleUpload(ev) {
+        const others = uploads.filter(u => u.id !== ev.id)
+        if (ev.state === "uploading") {
+            uploads = others.concat([ev])
+            return
+        }
+        uploads = others
+        if (ev.state === "done")
+            say(qsTr("Link copied"), ev.url, 6000)
+        else
+            say(qsTr("Couldn't share %1").arg(ev.file), ev.error, 8000)
+    }
+
+    function addToShelf(paths) {
+        shelf = shelf.concat(paths.filter(p => !shelf.includes(p)))
+    }
+
+    function removeFromShelf(path) {
+        shelf = shelf.filter(p => p !== path)
+    }
+
+    // Local paths from dropped urls; anything that isn't a local file is skipped.
+    function localPaths(urls) {
+        const paths = []
+        for (const url of urls) {
+            const text = String(url)
+            if (text.startsWith("file://"))
+                paths.push(decodeURIComponent(text.slice("file://".length)))
+        }
+        return paths
     }
 
     // The request was answered (here or by timing out); drop its buttons.

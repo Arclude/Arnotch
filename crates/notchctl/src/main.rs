@@ -3,6 +3,8 @@
 //!   notchctl notify <title> [body]   show a message
 //!   notchctl open [tab]              open the island (tabs: activity, terminals)
 //!   notchctl close                   close the island
+//!   notchctl shelf <file>...         put files on the shelf
+//!   notchctl share <file>            upload a file and copy its link
 //!   notchctl answer <decision>       answer Claude's latest permission request
 //!                                    (allow, deny, ask)
 //!   notchctl settings                open the settings window
@@ -20,6 +22,8 @@ const USAGE: &str = "usage:
   notchctl notify <title> [body]
   notchctl open [activity|terminals]
   notchctl close
+  notchctl shelf <file>...
+  notchctl share <file>
   notchctl answer allow|deny|ask
   notchctl settings
   notchctl terminals
@@ -46,6 +50,16 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        ["shelf", files @ ..] if !files.is_empty() => {
+            match files.iter().map(|f| absolute(f)).collect() {
+                Ok(paths) => send(&Event::Shelve { paths }),
+                Err(code) => code,
+            }
+        }
+        ["share", file] => match absolute(file) {
+            Ok(path) => send(&Event::Share { path }),
+            Err(code) => code,
+        },
         ["settings"] => send(&Event::OpenSettings),
         ["terminals"] => {
             let (terminals, _) = notch_core::terminals::Scanner::new().scan();
@@ -68,6 +82,16 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// The notch runs elsewhere, so paths must not depend on this shell's directory.
+fn absolute(file: &str) -> Result<String, ExitCode> {
+    std::fs::canonicalize(file)
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|err| {
+            eprintln!("notchctl: {file}: {err}");
+            ExitCode::FAILURE
+        })
 }
 
 fn send(event: &Event) -> ExitCode {

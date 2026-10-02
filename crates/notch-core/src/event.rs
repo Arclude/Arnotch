@@ -32,11 +32,29 @@ pub enum Event {
     },
     /// Close the island.
     Close,
+    /// Put files (absolute paths) on the shelf.
+    Shelve { paths: Vec<String> },
+    /// Share a file (absolute path) with the service chosen in the settings.
+    Share { path: String },
     /// Answer the most recent pending permission request.
     Answer { decision: Decision },
     /// The open terminals, published by the notch itself (never accepted from clients).
     #[serde(skip_deserializing)]
     Terminals { terminals: Vec<Terminal> },
+    /// Progress of a file being shared; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Upload {
+        id: u32,
+        /// File name, for display.
+        file: String,
+        /// From 0.0 to 1.0.
+        progress: f32,
+        state: UploadState,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
     /// A permission request was answered or abandoned; published by the notch itself.
     #[serde(skip_deserializing)]
     PermissionClosed { request_id: String },
@@ -125,4 +143,12 @@ pub enum Decision {
     Deny,
     /// Let the agent ask in its terminal as usual.
     Ask,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UploadState {
+    Uploading,
+    Done,
+    Failed,
 }

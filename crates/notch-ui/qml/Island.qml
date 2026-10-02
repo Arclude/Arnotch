@@ -38,13 +38,20 @@ Window {
     readonly property int collapsedHeight: settings.height
     // The tab picked by the user; an island opened by an event always shows activity.
     property string tab: "activity"
-    readonly property string shownTab: opened ? tab : "activity"
+    // Files are being dragged over the island: it shows drop targets instead of a tab.
+    property bool dragging: false
+    readonly property string shownTab: dragging ? "drop" : opened ? tab : "activity"
+    readonly property bool sharingOn: settings.shareService !== "off"
+
+    signal settingsRequested()
     readonly property bool onActivity: shownTab === "activity"
 
     // Show the detailed activity card instead of the headline.
     readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying
                                      && (notch.focus.steps.length > 0 || !!notch.focus.permission)
-    readonly property int expandedWidth: shownTab === "terminals" ? 540 : showCard ? 640 : 470
+    readonly property int expandedWidth: dragging ? 560
+                                       : shownTab === "terminals" || shownTab === "shelf" ? 540
+                                       : showCard ? 640 : 470
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
     readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.replying)
@@ -64,6 +71,7 @@ Window {
     readonly property bool expanded: opened
                                      || (notch.alerting && settings.autoExpand)
                                      || (notch.showingActivity && settings.liveActivity)
+                                     || dragging || notch.uploading
 
     readonly property color moodColor: notch.mood === "waiting" ? "#ffb020"
                                      : notch.mood === "working" ? "#4c8dff"
@@ -76,6 +84,64 @@ Window {
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | (wantsKeyboard ? 0 : Qt.WindowDoesNotAcceptFocus)
     visible: true
+
+    // Moving between drop targets leaves one area before entering the next;
+    // only a drag that stays out for a moment really left the island.
+    Timer {
+        id: dragLeave
+        interval: 250
+        onTriggered: root.dragging = false
+    }
+
+    function dragHovered() {
+        dragging = true
+        dragLeave.stop()
+    }
+
+    function dropped(action) {
+        dragging = false
+        dragLeave.stop()
+        action()
+    }
+
+    function shelve(urls) {
+        notch.addToShelf(notch.localPaths(urls))
+        tab = "shelf"
+        opened = true
+    }
+
+    function share(urls) {
+        if (!sharingOn) {
+            settingsRequested()
+            return
+        }
+        for (const path of notch.localPaths(urls))
+            bridge.shareFile(path, settings.shareService, settings.shareCommand)
+    }
+
+    function sendToClaude(terminalId, urls) {
+        bridge.sendFilesToClaude(terminalId, notch.localPaths(urls).join("\n"))
+        opened = false
+    }
+
+    // The whole island accepts files; the drop targets inside take priority.
+    DropArea {
+        anchors.fill: parent
+        onEntered: drag => {
+            if (!drag.hasUrls) {
+                drag.accepted = false
+                return
+            }
+            drag.accept(Qt.CopyAction)
+            root.dragHovered()
+        }
+        onExited: dragLeave.restart()
+        onDropped: drop => {
+            drop.accept(Qt.CopyAction)
+            const urls = drop.urls
+            root.dropped(() => root.shelve(urls))
+        }
+    }
 
     // Keeps the island open briefly after the pointer leaves, so it doesn't flicker.
     Timer {
@@ -218,13 +284,14 @@ Window {
 
             // Tabs, only when the user opened the island
             Row {
-                visible: root.opened
+                visible: root.opened && !root.dragging
                 spacing: 6
 
                 Repeater {
                     model: [
                         { id: "activity", label: qsTr("Activity") },
-                        { id: "terminals", label: qsTr("Terminals") + "  " + root.notch.terminals.length }
+                        { id: "terminals", label: qsTr("Terminals") + "  " + root.notch.terminals.length },
+                        { id: "shelf", label: qsTr("Shelf") + (root.notch.shelf.length ? "  " + root.notch.shelf.length : "") }
                     ]
 
                     Rectangle {
@@ -258,6 +325,83 @@ Window {
                 }
             }
 
+            // Files being shared, as in "Uploading report.pdf  54%"
+            Repeater {
+                model: root.dragging ? [] : root.notch.uploads
+
+                Column {
+                    required property var modelData
+
+                    width: expandedContent.width
+                    spacing: 6
+
+                    Item {
+                        width: parent.width
+                        height: 16
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: percent.left
+                            anchors.rightMargin: 8
+                            elide: Text.ElideMiddle
+                            text: qsTr("Uploading %1").arg(modelData.file)
+                            color: "#f2f3f5"
+                            font.pixelSize: 12
+                        }
+                        Text {
+                            id: percent
+                            anchors.right: parent.right
+                            text: Math.round(modelData.progress * 100) + "%"
+                            color: "#8b909a"
+                            font.pixelSize: 12
+                            font.features: { "tnum": 1 }
+                        }
+                    }
+                    Rectangle {
+                        width: parent.width
+                        height: 4
+                        radius: 2
+                        color: "#1affffff"
+
+                        Rectangle {
+                            width: parent.width * modelData.progress
+                            height: parent.height
+                            radius: 2
+                            color: "#34c759"
+
+                            Behavior on width { NumberAnimation { duration: 150 } }
+                        }
+                    }
+                }
+            }
+
+            DropTargets {
+                width: parent.width
+                visible: root.dragging
+                claudeTerminals: root.notch.claudeTerminals
+                sharingOn: root.sharingOn
+                onTargetEntered: root.dragHovered()
+                onTargetExited: dragLeave.restart()
+                onShelve: urls => root.dropped(() => root.shelve(urls))
+                onSendToClaude: (terminalId, urls) => root.dropped(() => root.sendToClaude(terminalId, urls))
+                onShare: urls => root.dropped(() => root.share(urls))
+            }
+
+            ShelfView {
+                width: parent.width
+                visible: root.shownTab === "shelf"
+                shelf: root.notch.shelf
+                bridge: root.bridge
+                claudeTerminals: root.notch.claudeTerminals
+                sharingOn: root.sharingOn
+                onRemove: path => root.notch.removeFromShelf(path)
+                onShare: path => root.bridge.shareFile(path, root.settings.shareService, root.settings.shareCommand)
+                onSendToClaude: (terminalId, path) => {
+                    root.bridge.sendFilesToClaude(terminalId, path)
+                    root.opened = false
+                }
+            }
+
             TerminalsView {
                 id: terminalsView
                 width: parent.width
@@ -273,7 +417,9 @@ Window {
                 replyTerminalId: root.replyTerminalId
                 onReplied: text => root.bridge.sendText(root.replyTerminalId, text)
                 visible: root.showCard
-                session: root.notch.focus ?? ({})
+                // Placeholder while no session is focused (the card is hidden then).
+                session: root.notch.focus ?? ({ project: "", phase: "", message: "", prompt: "", steps: [],
+                                                 view: "", diff: null, command: "", output: [], result: "" })
                 mood: root.notch.mood
                 moodColor: root.moodColor
                 onAnswered: decision => {

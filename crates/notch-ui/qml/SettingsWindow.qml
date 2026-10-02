@@ -6,10 +6,11 @@ ApplicationWindow {
     id: win
 
     required property var settings
+    readonly property bool sharingOn: settings.shareService !== "off"
 
     title: qsTr("Notch Settings")
     width: 520
-    height: 460
+    height: 560
     minimumWidth: 420
     minimumHeight: 300
 
@@ -101,6 +102,41 @@ ApplicationWindow {
                 text: qsTr("Answer Claude's permission requests here")
                 checked: win.settings.permissionPrompts
                 onToggled: win.settings.permissionPrompts = checked
+            }
+
+            Label { text: qsTr("Sharing") }
+            ComboBox {
+                Layout.fillWidth: true
+                textRole: "text"
+                valueRole: "value"
+                model: [
+                    { text: qsTr("Off"), value: "off" },
+                    { text: qsTr("0x0.st (kept 30 days to 1 year)"), value: "0x0" },
+                    { text: qsTr("catbox.moe (permanent)"), value: "catbox" },
+                    { text: qsTr("litterbox (deleted after 24 hours)"), value: "litterbox" },
+                    { text: qsTr("Custom command"), value: "custom" }
+                ]
+                Component.onCompleted: currentIndex = indexOfValue(win.settings.shareService)
+                onActivated: win.settings.shareService = currentValue
+            }
+
+            Item { visible: win.settings.shareService === "custom"; implicitWidth: 1 }
+            TextField {
+                Layout.fillWidth: true
+                visible: win.settings.shareService === "custom"
+                placeholderText: "curl -F file=@{file} https://example.com"
+                text: win.settings.shareCommand
+                onEditingFinished: win.settings.shareCommand = text
+            }
+
+            Item { visible: win.sharingOn; implicitWidth: 1 }
+            Label {
+                Layout.fillWidth: true
+                visible: win.sharingOn
+                wrapMode: Text.WordWrap
+                opacity: 0.7
+                font.pixelSize: 11
+                text: qsTr("Shared files are uploaded to this service and anyone with the link can download them.")
             }
 
             Label { text: qsTr("Live activity") }

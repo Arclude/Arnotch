@@ -1,14 +1,16 @@
 //! The QML-facing side of the notch: `NotchBridge` re-emits every IPC event
 //! as a JSON string so QML can react to it.
 
+use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
+use notch_core::event::UploadState;
 use notch_core::terminals::{self, Terminal};
-use notch_core::{Decision, Event, control, focus, ipc};
+use notch_core::{Decision, Event, clipboard, control, focus, ipc, share};
 use tokio::sync::broadcast;
 
 #[cxx_qt::bridge]
@@ -39,6 +41,23 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "answerPermission"]
         fn answer_permission(self: &NotchBridge, request_id: &QString, decision: &QString) -> bool;
+
+        /// Uploads a file to the chosen sharing service and copies the link.
+        /// Progress arrives as `upload` events.
+        #[qinvokable]
+        #[cxx_name = "shareFile"]
+        fn share_file(self: &NotchBridge, path: &QString, service: &QString, command: &QString);
+
+        /// Mentions files (one path per line) in the Claude session running in a
+        /// terminal, without submitting, then switches to that terminal.
+        #[qinvokable]
+        #[cxx_name = "sendFilesToClaude"]
+        fn send_files_to_claude(self: &NotchBridge, terminal_id: &QString, paths: &QString);
+
+        /// `{"exists": bool, "size": bytes, "dir": bool}` as JSON.
+        #[qinvokable]
+        #[cxx_name = "fileInfo"]
+        fn file_info(self: &NotchBridge, path: &QString) -> QString;
 
         /// Tells the notch whether a terminal list is on screen, to rescan more often.
         #[qinvokable]
@@ -105,6 +124,93 @@ impl qobject::NotchBridge {
             _ => Decision::Ask,
         };
         ipc::answer(&request_id.to_string(), decision)
+    }
+
+    pub fn share_file(&self, path: &QString, service: &QString, command: &QString) {
+        static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+
+        let path = PathBuf::from(path.to_string());
+        let file = path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let Some(service) =
+            share::Service::from_setting(&service.to_string(), &command.to_string())
+        else {
+            _ = event_bus().send(Event::Notify {
+                title: "Sharing is off".into(),
+                body: "Choose a sharing service in the settings".into(),
+            });
+            return;
+        };
+
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        let report =
+            move |progress: f32, state: UploadState, url: Option<String>, error: Option<String>| {
+                _ = event_bus().send(Event::Upload {
+                    id,
+                    file: file.clone(),
+                    progress,
+                    state,
+                    url,
+                    error,
+                });
+            };
+        report(0.0, UploadState::Uploading, None, None);
+
+        std::thread::spawn(move || {
+            // curl redraws its bar many times a second; a percent step is enough.
+            let mut last = 0.0;
+            let result = share::upload(&path, &service, |progress| {
+                if progress - last >= 0.01 {
+                    last = progress;
+                    report(progress, UploadState::Uploading, None, None);
+                }
+            });
+            match result {
+                Ok(url) => {
+                    if let Err(err) = clipboard::copy(&url) {
+                        tracing::warn!("cannot copy the link: {err:#}");
+                    }
+                    report(1.0, UploadState::Done, Some(url), None);
+                }
+                Err(err) => report(last, UploadState::Failed, None, Some(format!("{err:#}"))),
+            }
+        });
+    }
+
+    pub fn send_files_to_claude(&self, terminal_id: &QString, paths: &QString) {
+        // Claude Code reads files mentioned as @path; quote paths with spaces.
+        let mentions: Vec<String> = paths
+            .to_string()
+            .lines()
+            .filter(|p| !p.is_empty())
+            .map(|p| {
+                if p.contains(' ') {
+                    format!("@\"{p}\"")
+                } else {
+                    format!("@{p}")
+                }
+            })
+            .collect();
+        let text = format!("{} ", mentions.join(" "));
+        with_terminal(
+            terminal_id,
+            "Can't send the file to Claude",
+            move |terminal| {
+                control::send_text(terminal, &text, false)?;
+                control::focus_tab(terminal)
+            },
+        );
+    }
+
+    pub fn file_info(&self, path: &QString) -> QString {
+        let info = match std::fs::metadata(path.to_string()) {
+            Ok(meta) => {
+                serde_json::json!({ "exists": true, "size": meta.len(), "dir": meta.is_dir() })
+            }
+            Err(_) => serde_json::json!({ "exists": false, "size": 0, "dir": false }),
+        };
+        QString::from(&info.to_string())
     }
 
     pub fn set_terminals_visible(&self, visible: bool) {

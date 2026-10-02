@@ -37,6 +37,11 @@ fn main() -> anyhow::Result<()> {
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from("qrc:/qt/qml/dev/notch/qml/Main.qml"));
     }
+    // Without its QML the notch would run with no window at all.
+    if !engine.as_ref().is_some_and(app::ffi::engine_loaded) {
+        _ = std::fs::remove_file(ipc::socket_path());
+        anyhow::bail!("the interface failed to load, see the QML errors above");
+    }
     if let Some(app) = app.as_mut() {
         app::ffi::exec(app);
     }

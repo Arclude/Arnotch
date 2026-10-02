@@ -226,7 +226,7 @@ Item {
                 }
 
                 Text {
-                    visible: card.shownDiff && (card.shownDiff.truncated || card.shownDiff.lines.length > card.maxDiffLines)
+                    visible: !!card.shownDiff && (card.shownDiff.truncated || card.shownDiff.lines.length > card.maxDiffLines)
                     leftPadding: 32
                     text: "⋯"
                     color: "#5c616b"

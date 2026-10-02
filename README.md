@@ -79,6 +79,20 @@ Open them from the tray icon (or `notchctl settings`). Stored in `~/.config/notc
 - **Clock**: show the time inside the island, handy when it replaces the panel's clock.
 - **Events**: open the island automatically when something happens.
 
+## Files
+
+Drag files onto the island and drop them on one of its targets:
+
+- **Keep on shelf**: the *Shelf* tab keeps them (by path) across restarts. Drag them back out
+  into any app, open them, share them or send them to Claude.
+- **Send to Claude**: types `@path` into the prompt of a Claude Code session running in a
+  supported terminal, without submitting, and switches to it.
+- **Share link**: uploads the file and copies the link, with a progress bar. Off by default:
+  pick a service in the settings (0x0.st, catbox.moe, litterbox for 24 hours, or your own
+  command, where `{file}` is the quoted path and the last line printed is the link).
+
+`notchctl shelf <file>...` and `notchctl share <file>` do the same from a terminal.
+
 ## Performance
 
 The island uses Qt's software renderer by default: for a surface this small it needs about half

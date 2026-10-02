@@ -9,6 +9,11 @@ std::unique_ptr<QApplication> notchAppNew()
     static char name[] = "notch";
     static char *argv[] = {name, nullptr};
 
+    // Qt sends warnings to the journal when stderr isn't a terminal; keep them
+    // next to notch's own log so QML errors are never silent.
+    if (qEnvironmentVariableIsEmpty("QT_FORCE_STDERR_LOGGING"))
+        qputenv("QT_FORCE_STDERR_LOGGING", "1");
+
     // Settings are stored in ~/.config/notch/notch.conf
     QCoreApplication::setOrganizationName(QStringLiteral("notch"));
     QCoreApplication::setApplicationName(QStringLiteral("notch"));
@@ -22,6 +27,11 @@ std::unique_ptr<QApplication> notchAppNew()
     // The islands live on even when the settings window is closed.
     app->setQuitOnLastWindowClosed(false);
     return app;
+}
+
+bool notchEngineLoaded(const QQmlApplicationEngine &engine)
+{
+    return !engine.rootObjects().isEmpty();
 }
 
 int notchAppExec(QApplication &app)

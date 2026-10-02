@@ -19,11 +19,27 @@ QtObject {
         property bool autoExpand: true
         // Answer Claude Code's permission requests from the island
         property bool permissionPrompts: true
+        // Sharing service for dropped files: "off", "0x0", "catbox", "litterbox" or "custom"
+        property string shareService: "off"
+        // For "custom": a shell command, {file} is the quoted path, prints the link
+        property string shareCommand: ""
+        // Paths on the shelf, as a JSON array
+        property string shelf: "[]"
         // Briefly open the island to show diffs and command output
         property bool liveActivity: true
     }
 
     property NotchState state: NotchState {
+        // The shelf survives restarts.
+        Component.onCompleted: {
+            try {
+                shelf = JSON.parse(app.settings.shelf)
+            } catch (e) {
+                shelf = []
+            }
+        }
+        onShelfChanged: app.settings.shelf = JSON.stringify(shelf)
+
         onPermissionRequested: requestId => {
             if (!app.settings.permissionPrompts) {
                 app.bridge.answerPermission(requestId, "ask")
@@ -43,6 +59,10 @@ QtObject {
                 app.openIslands(ev.tab)
             else if (ev.type === "close")
                 app.closeIslands()
+            else if (ev.type === "shelve")
+                app.state.addToShelf(ev.paths)
+            else if (ev.type === "share")
+                app.bridge.shareFile(ev.path, app.settings.shareService, app.settings.shareCommand)
             else
                 app.state.handleEvent(ev)
         }
@@ -69,6 +89,7 @@ QtObject {
             notch: app.state
             settings: app.settings
             bridge: app.bridge
+            onSettingsRequested: app.openSettings()
         }
     }
 

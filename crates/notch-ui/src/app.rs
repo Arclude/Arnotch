@@ -7,10 +7,16 @@ pub mod ffi {
 
         type QApplication;
 
+        include!("cxx-qt-lib/qqmlapplicationengine.h");
+        type QQmlApplicationEngine = cxx_qt_lib::QQmlApplicationEngine;
+
         #[cxx_name = "notchAppNew"]
         fn new_app() -> UniquePtr<QApplication>;
 
         #[cxx_name = "notchAppExec"]
         fn exec(app: Pin<&mut QApplication>) -> i32;
+
+        #[cxx_name = "notchEngineLoaded"]
+        fn engine_loaded(engine: &QQmlApplicationEngine) -> bool;
     }
 }
