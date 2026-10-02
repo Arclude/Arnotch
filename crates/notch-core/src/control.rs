@@ -1,9 +1,13 @@
 //! Types into terminals and switches to their tabs, through each terminal's own
-//! remote-control interface: Konsole's D-Bus API, tmux, WezTerm's CLI and kitty's
-//! remote control. (Linux no longer lets one program inject keystrokes into
-//! another's terminal, so there is no generic way.)
+//! remote-control interface: Konsole's D-Bus API, tmux, WezTerm's CLI, kitty's
+//! remote control and Arterm's control socket. (Linux no longer lets one program
+//! inject keystrokes into another's terminal, so there is no generic way.)
 
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, bail};
 
@@ -11,79 +15,109 @@ use crate::focus;
 use crate::terminals::{self, Terminal};
 
 /// Whether text can be sent to this terminal.
-pub fn can_send(app: &str) -> bool {
-    matches!(app, "Konsole" | "tmux" | "WezTerm" | "kitty")
+pub fn can_send(app: &str, app_pid: u32) -> bool {
+    match app {
+        "Konsole" | "tmux" | "WezTerm" | "kitty" => true,
+        // Only Arterm versions with the control socket.
+        "Arterm" => arterm_socket(app_pid).exists(),
+        _ => false,
+    }
 }
 
 /// Types `text` into the terminal, followed by Enter when `submit` is set.
+///
+/// Enter goes separately, a moment later: programs such as Claude Code treat text
+/// arriving in one burst as a paste, where Enter only adds a new line.
 pub fn send_text(terminal: &Terminal, text: &str, submit: bool) -> anyhow::Result<()> {
-    let text = if submit {
-        format!("{text}\r")
-    } else {
-        text.to_owned()
-    };
+    type_text(terminal, text)?;
+    if submit {
+        std::thread::sleep(Duration::from_millis(80));
+        press_enter(terminal)?;
+    }
+    Ok(())
+}
+
+fn type_text(terminal: &Terminal, text: &str) -> anyhow::Result<()> {
     match terminal.app.as_str() {
-        "Konsole" => {
-            let (service, session) = konsole_session(terminal)?;
-            dbus(&service, &format!("/Sessions/{session}"), "org.kde.konsole.Session.sendText", &[&format!("string:{text}")])
-                .map(drop)
-                .map_err(|err| {
-                    if err.to_string().contains("AccessDenied") {
-                        anyhow::anyhow!(
-                            "Konsole blocks typing from other apps. Enable it in Konsole: Settings › \
-                             Configure Konsole › General › “Enable the security sensitive parts of the DBus API”"
-                        )
-                    } else {
-                        err
-                    }
-                })
-        }
-        "tmux" => {
-            let pane = tmux_pane(terminal)?;
-            // -l sends the text literally; Enter must then be sent as a key name.
-            let body = text.trim_end_matches('\r');
-            run("tmux", &["send-keys", "-t", &pane, "-l", "--", body])?;
-            if submit {
-                run("tmux", &["send-keys", "-t", &pane, "Enter"])?;
-            }
-            Ok(())
-        }
-        "WezTerm" => {
-            let pane = wezterm_pane(terminal)?;
-            run(
-                "wezterm",
-                &[
-                    "cli",
-                    "send-text",
-                    "--pane-id",
-                    &pane,
-                    "--no-paste",
-                    "--",
-                    &text,
-                ],
-            )
-            .map(drop)
-        }
-        "kitty" => {
-            let socket = kitty_socket(terminal)?;
-            let target = format!("pid:{}", terminal.shell_pid);
-            run(
-                "kitty",
-                &[
-                    "@",
-                    "--to",
-                    &socket,
-                    "send-text",
-                    "--match",
-                    &target,
-                    "--",
-                    &text,
-                ],
-            )
-            .map(drop)
-        }
+        "Konsole" => konsole_send(terminal, text),
+        // -l sends the text literally instead of as key names.
+        "tmux" => run(
+            "tmux",
+            &["send-keys", "-t", &tmux_pane(terminal)?, "-l", "--", text],
+        )
+        .map(drop),
+        "WezTerm" => wezterm_send(terminal, text),
+        "kitty" => kitty_send(terminal, text),
+        "Arterm" => arterm_request(
+            terminal,
+            serde_json::json!({
+                "cmd": "write",
+                "shell_pid": terminal.shell_pid,
+                "text": text,
+            }),
+        ),
         app => bail!("sending text to {app} is not supported"),
     }
+}
+
+fn press_enter(terminal: &Terminal) -> anyhow::Result<()> {
+    match terminal.app.as_str() {
+        "tmux" => run("tmux", &["send-keys", "-t", &tmux_pane(terminal)?, "Enter"]).map(drop),
+        _ => type_text(terminal, "\r"),
+    }
+}
+
+fn konsole_send(terminal: &Terminal, text: &str) -> anyhow::Result<()> {
+    let (service, session) = konsole_session(terminal)?;
+    let path = format!("/Sessions/{session}");
+    dbus(&service, &path, "org.kde.konsole.Session.sendText", &[&format!("string:{text}")])
+        .map(drop)
+        .map_err(|err| {
+            if err.to_string().contains("AccessDenied") {
+                anyhow::anyhow!(
+                    "Konsole blocks typing from other apps. Enable it in Konsole: Settings › \
+                     Configure Konsole › General › “Enable the security sensitive parts of the DBus API”"
+                )
+            } else {
+                err
+            }
+        })
+}
+
+fn wezterm_send(terminal: &Terminal, text: &str) -> anyhow::Result<()> {
+    let pane = wezterm_pane(terminal)?;
+    run(
+        "wezterm",
+        &[
+            "cli",
+            "send-text",
+            "--pane-id",
+            &pane,
+            "--no-paste",
+            "--",
+            text,
+        ],
+    )
+    .map(drop)
+}
+
+fn kitty_send(terminal: &Terminal, text: &str) -> anyhow::Result<()> {
+    let socket = kitty_socket(terminal)?;
+    let target = format!("pid:{}", terminal.shell_pid);
+    run(
+        "kitty",
+        &[
+            "@",
+            "--to",
+            &socket,
+            "send-text",
+            "--match",
+            &target,
+            "--",
+            text,
+        ],
+    )
+    .map(drop)
 }
 
 /// Brings the terminal's window to the front and selects the tab of this shell.
@@ -120,6 +154,15 @@ pub fn focus_tab(terminal: &Terminal) -> anyhow::Result<()> {
             run(
                 "kitty",
                 &["@", "--to", &socket, "focus-window", "--match", &target],
+            )?;
+        }
+        "Arterm" => {
+            arterm_request(
+                terminal,
+                serde_json::json!({
+                    "cmd": "focus",
+                    "shell_pid": terminal.shell_pid,
+                }),
             )?;
         }
         _ => {}
@@ -228,6 +271,41 @@ fn wezterm_pane(terminal: &Terminal) -> anyhow::Result<String> {
         .and_then(|pane| pane["pane_id"].as_u64())
         .map(|id| id.to_string())
         .with_context(|| format!("no WezTerm pane on {tty}"))
+}
+
+// Arterm: a JSON-lines control socket in its bridge, keyed by the app's pid.
+
+fn arterm_socket(app_pid: u32) -> PathBuf {
+    let runtime =
+        std::env::var_os("XDG_RUNTIME_DIR").map_or_else(std::env::temp_dir, PathBuf::from);
+    runtime
+        .join("arterm")
+        .join(format!("control-{app_pid}.sock"))
+}
+
+fn arterm_request(terminal: &Terminal, request: serde_json::Value) -> anyhow::Result<()> {
+    let path = arterm_socket(terminal.app_pid);
+    let mut stream = UnixStream::connect(&path).with_context(|| {
+        format!(
+            "Arterm's control socket is not available ({})",
+            path.display()
+        )
+    })?;
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    stream.write_all(format!("{request}\n").as_bytes())?;
+
+    let mut reply = String::new();
+    BufReader::new(stream).read_line(&mut reply)?;
+    let reply: serde_json::Value =
+        serde_json::from_str(&reply).context("unreadable reply from Arterm")?;
+    if reply["ok"] == true {
+        Ok(())
+    } else {
+        bail!(
+            "Arterm: {}",
+            reply["error"].as_str().unwrap_or("request failed")
+        )
+    }
 }
 
 /// kitty only accepts remote control on a socket set up with `listen_on`.

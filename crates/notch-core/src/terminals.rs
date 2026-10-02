@@ -189,7 +189,7 @@ impl Scanner {
                 let cwd_pid = command.as_ref().map_or(shell.pid, |c| c.pgid);
                 Terminal {
                     id: pty_name(shell.tty_nr),
-                    can_send: crate::control::can_send(&app),
+                    can_send: crate::control::can_send(&app, app_pid),
                     app,
                     app_pid,
                     shell_pid: shell.pid as u32,

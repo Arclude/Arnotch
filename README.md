@@ -64,6 +64,7 @@ so they need a supported terminal:
 | tmux | none |
 | WezTerm | none (`wezterm cli`) |
 | kitty | `allow_remote_control yes` and `listen_on unix:@kitty-{kitty_pid}` in `kitty.conf` (or set `NOTCH_KITTY_SOCKET`) |
+| Arterm | a version with the control socket (`$XDG_RUNTIME_DIR/arterm/control-<pid>.sock`) |
 
 When Claude waits for you, the activity card offers *Reply to Claude*, which types your message
 into the terminal running that Claude session.
