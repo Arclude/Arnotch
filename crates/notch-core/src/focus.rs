@@ -22,7 +22,10 @@ pub fn focus_window(pid: u32) -> anyhow::Result<()> {
     if desktop.to_lowercase().contains("kde") {
         return kwin_focus(pid);
     }
-    anyhow::bail!("focusing windows is not supported on {desktop:?} yet")
+    anyhow::bail!(crate::i18n::trf(
+        "Switching windows is not supported on {} yet",
+        &[&desktop]
+    ))
 }
 
 const KWIN_SCRIPT_NAME: &str = "notch-focus";

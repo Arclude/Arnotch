@@ -31,7 +31,9 @@ pub fn copy(text: &str) -> anyhow::Result<()> {
         .stderr(Stdio::null())
         .status()?;
     if !status.success() {
-        bail!("no clipboard tool found (install wl-clipboard)");
+        bail!(crate::i18n::tr(
+            "No clipboard tool found (install wl-clipboard)"
+        ));
     }
     Ok(())
 }

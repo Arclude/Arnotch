@@ -9,6 +9,7 @@ use std::sync::{Mutex, OnceLock};
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
 use notch_core::event::UploadState;
+use notch_core::i18n::{self, tr};
 use notch_core::terminals::{self, Terminal};
 use notch_core::{Decision, Event, clipboard, control, focus, ipc, share};
 use tokio::sync::broadcast;
@@ -137,8 +138,8 @@ impl qobject::NotchBridge {
             share::Service::from_setting(&service.to_string(), &command.to_string())
         else {
             _ = event_bus().send(Event::Notify {
-                title: "Sharing is off".into(),
-                body: "Choose a sharing service in the settings".into(),
+                title: tr("Sharing is off").into(),
+                body: tr("Choose a sharing service in the settings").into(),
             });
             return;
         };
@@ -195,10 +196,24 @@ impl qobject::NotchBridge {
         let text = format!("{} ", mentions.join(" "));
         with_terminal(
             terminal_id,
-            "Can't send the file to Claude",
+            tr("Can't send the file to Claude"),
             move |terminal| {
-                control::send_text(terminal, &text, false)?;
-                control::focus_tab(terminal)
+                let typed = terminal.can_send
+                    && control::send_text(terminal, &text, false)
+                        .inspect_err(|err| {
+                            tracing::warn!("cannot type into {}: {err:#}", terminal.id)
+                        })
+                        .is_ok();
+                if !typed {
+                    // The terminal can't be typed into (e.g. Konsole's setting is off):
+                    // hand the mention over through the clipboard instead.
+                    clipboard::copy(text.trim_end())?;
+                    _ = event_bus().send(Event::Notify {
+                        title: tr("File path copied").into(),
+                        body: tr("Paste it into Claude with Ctrl+Shift+V").into(),
+                    });
+                }
+                control::focus_tab(terminal).or_else(|_| focus::focus_window(terminal.app_pid))
             },
         );
     }
@@ -218,7 +233,7 @@ impl qobject::NotchBridge {
     }
 
     pub fn focus_terminal(&self, id: &QString) {
-        with_terminal(id, "Can't switch to the terminal", |terminal| {
+        with_terminal(id, tr("Can't switch to the terminal"), |terminal| {
             control::focus_tab(terminal)
                 // A tab we can't select still has a window we can raise.
                 .or_else(|_| focus::focus_window(terminal.app_pid))
@@ -227,7 +242,7 @@ impl qobject::NotchBridge {
 
     pub fn send_text(&self, id: &QString, text: &QString) {
         let text = text.to_string();
-        with_terminal(id, "Can't type into the terminal", move |terminal| {
+        with_terminal(id, tr("Can't type into the terminal"), move |terminal| {
             control::send_text(terminal, &text, true)
         });
     }
@@ -247,7 +262,7 @@ fn with_terminal(
     };
     std::thread::spawn(move || {
         let result = terminal
-            .ok_or_else(|| anyhow::anyhow!("terminal {id} is gone"))
+            .ok_or_else(|| anyhow::anyhow!(i18n::trf("Terminal {} is gone", &[&id])))
             .and_then(|terminal| action(&terminal));
         if let Err(err) = result {
             tracing::warn!("{failure} ({id}): {err:#}");

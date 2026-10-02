@@ -7,6 +7,7 @@ pub mod control;
 pub mod diff;
 pub mod event;
 pub mod focus;
+pub mod i18n;
 pub mod ipc;
 pub mod share;
 pub mod terminals;

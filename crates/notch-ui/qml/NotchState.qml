@@ -30,8 +30,14 @@ QtObject {
     property bool happy: false
     // [{ id, app, app_pid, shell_pid, shell, cwd, command: { pgid, name, args, started_at, cpu } | null, can_send }]
     property var terminals: []
-    // Terminals running Claude Code that files can be sent to.
-    readonly property var claudeTerminals: terminals.filter(t => t.can_send && t.command && t.command.name === "claude")
+    // Terminals running Claude Code, best candidates first: the session shown in the
+    // island, then terminals that can be typed into (others get the path via the clipboard).
+    readonly property var claudeTerminals: {
+        const focusCwd = focus ? focus.cwd : ""
+        const rank = t => (t.cwd === focusCwd ? 0 : 2) + (t.can_send ? 0 : 1)
+        return terminals.filter(t => t.command && t.command.name === "claude")
+                        .sort((a, b) => rank(a) - rank(b))
+    }
 
     // Paths of the files kept on the shelf; Main persists them.
     property var shelf: []

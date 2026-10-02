@@ -37,10 +37,10 @@ Column {
     function elapsed(startedAt) {
         const secs = Math.max(0, Math.floor(now - startedAt))
         if (secs < 60)
-            return `${secs}s`
+            return qsTr("%1s").arg(secs)
         if (secs < 3600)
-            return `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`
-        return `${Math.floor(secs / 3600)}h ${String(Math.floor(secs % 3600 / 60)).padStart(2, "0")}m`
+            return qsTr("%1m %2s").arg(Math.floor(secs / 60)).arg(String(secs % 60).padStart(2, "0"))
+        return qsTr("%1h %2m").arg(Math.floor(secs / 3600)).arg(String(Math.floor(secs % 3600 / 60)).padStart(2, "0"))
     }
 
     function shortPath(path) {

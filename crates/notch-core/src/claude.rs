@@ -100,7 +100,7 @@ pub fn permission_output(decision: Decision) -> Option<String> {
         Decision::Allow => serde_json::json!({ "behavior": "allow" }),
         Decision::Deny => serde_json::json!({
             "behavior": "deny",
-            "message": "Denied from the notch",
+            "message": crate::i18n::tr("Denied from the notch"),
         }),
         Decision::Ask => return None,
     };

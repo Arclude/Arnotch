@@ -10,6 +10,8 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, bail};
 
+use crate::i18n::{tr, trf};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Service {
     /// <https://0x0.st>: kept 30 days to 1 year depending on size.
@@ -43,7 +45,7 @@ pub fn upload(
     mut progress: impl FnMut(f32),
 ) -> anyhow::Result<String> {
     if !path.is_file() {
-        bail!("{} is not a file", path.display());
+        bail!(trf("{} is not a file", &[&path.display()]));
     }
     let mut command = match service {
         Service::Custom(template) => {
@@ -59,7 +61,7 @@ pub fn upload(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("cannot run curl")?;
+        .context(tr("Cannot run curl"))?;
 
     // curl's progress bar redraws one line with \r: "#####    45.3%".
     let mut stderr = child.stderr.take().expect("stderr is piped");
@@ -94,14 +96,12 @@ pub fn upload(
         .unwrap_or_default();
     if !output.status.success() || !link.starts_with("http") {
         let reason = if link.is_empty() { errors.trim() } else { link };
-        bail!(
-            "upload failed: {}",
-            if reason.is_empty() {
-                "no link returned"
-            } else {
-                reason
-            }
-        );
+        let reason = if reason.is_empty() {
+            tr("no link returned")
+        } else {
+            reason
+        };
+        bail!(trf("Upload failed: {}", &[&reason]));
     }
     progress(1.0);
     Ok(link.to_owned())
@@ -147,11 +147,7 @@ fn curl_command(path: &Path, service: &Service) -> Command {
 }
 
 fn parse_percent(line: &str) -> Option<f32> {
-    let number = line
-        .trim()
-        .strip_suffix('%')?
-        .rsplit([' ', '#'])
-        .next()?;
+    let number = line.trim().strip_suffix('%')?.rsplit([' ', '#']).next()?;
     number.parse().ok()
 }
 

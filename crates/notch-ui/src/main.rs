@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use notch_core::terminals::{Finished, Scanner};
-use notch_core::{Event, ipc};
+use notch_core::{Event, i18n, ipc};
 use tracing_subscriber::EnvFilter;
 
 fn main() -> anyhow::Result<()> {
@@ -75,15 +75,12 @@ fn watch_terminals() {
 }
 
 fn finished_notification(done: &Finished) -> Event {
-    let secs = done.duration_secs;
-    let duration = match secs {
-        0..60 => format!("{secs}s"),
-        60..3600 => format!("{}m {:02}s", secs / 60, secs % 60),
-        _ => format!("{}h {:02}m", secs / 3600, secs % 3600 / 60),
-    };
     let folder = done.cwd.rsplit('/').next().unwrap_or_default();
     Event::Notify {
         title: done.args.clone(),
-        body: format!("Finished after {duration} · {} · {folder}", done.app),
+        body: i18n::trf(
+            "Finished after {} · {} · {}",
+            &[&i18n::duration(done.duration_secs), &done.app, &folder],
+        ),
     }
 }

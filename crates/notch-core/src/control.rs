@@ -12,6 +12,7 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 
 use crate::focus;
+use crate::i18n::{tr, trf};
 use crate::terminals::{self, Terminal};
 
 /// Whether text can be sent to this terminal.
@@ -56,7 +57,7 @@ fn type_text(terminal: &Terminal, text: &str) -> anyhow::Result<()> {
                 "text": text,
             }),
         ),
-        app => bail!("sending text to {app} is not supported"),
+        app => bail!(trf("Sending text to {} is not supported", &[&app])),
     }
 }
 
@@ -74,10 +75,9 @@ fn konsole_send(terminal: &Terminal, text: &str) -> anyhow::Result<()> {
         .map(drop)
         .map_err(|err| {
             if err.to_string().contains("AccessDenied") {
-                anyhow::anyhow!(
-                    "Konsole blocks typing from other apps. Enable it in Konsole: Settings › \
-                     Configure Konsole › General › “Enable the security sensitive parts of the DBus API”"
-                )
+                anyhow::anyhow!(tr(
+                    "Konsole blocks typing from other apps. Enable it in Konsole: Settings › Configure Konsole › General › “Enable the security sensitive parts of the DBus API”"
+                ))
             } else {
                 err
             }
@@ -285,12 +285,8 @@ fn arterm_socket(app_pid: u32) -> PathBuf {
 
 fn arterm_request(terminal: &Terminal, request: serde_json::Value) -> anyhow::Result<()> {
     let path = arterm_socket(terminal.app_pid);
-    let mut stream = UnixStream::connect(&path).with_context(|| {
-        format!(
-            "Arterm's control socket is not available ({})",
-            path.display()
-        )
-    })?;
+    let mut stream = UnixStream::connect(&path)
+        .with_context(|| tr("Arterm's control socket is not available; update Arterm"))?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     stream.write_all(format!("{request}\n").as_bytes())?;
 

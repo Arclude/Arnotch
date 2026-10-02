@@ -1,6 +1,9 @@
 #include "app.h"
 
+#include <QIcon>
+#include <QLocale>
 #include <QQuickWindow>
+#include <QTranslator>
 
 std::unique_ptr<QApplication> notchAppNew()
 {
@@ -24,8 +27,15 @@ std::unique_ptr<QApplication> notchAppNew()
         QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
 
     auto app = std::make_unique<QApplication>(argc, argv);
+    app->setWindowIcon(QIcon(QStringLiteral(":/icons/notch.svg")));
+
     // The islands live on even when the settings window is closed.
     app->setQuitOnLastWindowClosed(false);
+
+    // The interface in the user's language, when notch has a translation for it.
+    static QTranslator translator;
+    if (translator.load(QLocale(), QStringLiteral("notch"), QStringLiteral("_"), QStringLiteral(":/i18n")))
+        QCoreApplication::installTranslator(&translator);
     return app;
 }
 

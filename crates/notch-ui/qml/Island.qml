@@ -49,7 +49,7 @@ Window {
     // Show the detailed activity card instead of the headline.
     readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying
                                      && (notch.focus.steps.length > 0 || !!notch.focus.permission)
-    readonly property int expandedWidth: dragging ? 560
+    readonly property int expandedWidth: dragging ? 620
                                        : shownTab === "terminals" || shownTab === "shelf" ? 540
                                        : showCard ? 640 : 470
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
@@ -87,15 +87,22 @@ Window {
 
     // Moving between drop targets leaves one area before entering the next;
     // only a drag that stays out for a moment really left the island.
-    Timer {
-        id: dragLeave
-        interval: 250
-        onTriggered: root.dragging = false
+    // Files are over the island or one of its targets. Leaving one area for the next
+    // briefly reads false, so the island only closes when the drag stays out.
+    readonly property bool dragInside: islandDrop.containsDrag || dropTargets.containsDrag
+    onDragInsideChanged: {
+        if (dragInside) {
+            dragging = true
+            dragLeave.stop()
+        } else {
+            dragLeave.restart()
+        }
     }
 
-    function dragHovered() {
-        dragging = true
-        dragLeave.stop()
+    Timer {
+        id: dragLeave
+        interval: 300
+        onTriggered: if (!root.dragInside) root.dragging = false
     }
 
     function dropped(action) {
@@ -126,6 +133,7 @@ Window {
 
     // The whole island accepts files; the drop targets inside take priority.
     DropArea {
+        id: islandDrop
         anchors.fill: parent
         onEntered: drag => {
             if (!drag.hasUrls) {
@@ -133,10 +141,9 @@ Window {
                 return
             }
             drag.accept(Qt.CopyAction)
-            root.dragHovered()
         }
-        onExited: dragLeave.restart()
         onDropped: drop => {
+            console.info(`notch: dropped ${drop.urls.length} file(s) on the island`)
             drop.accept(Qt.CopyAction)
             const urls = drop.urls
             root.dropped(() => root.shelve(urls))
@@ -376,12 +383,11 @@ Window {
             }
 
             DropTargets {
+                id: dropTargets
                 width: parent.width
                 visible: root.dragging
                 claudeTerminals: root.notch.claudeTerminals
                 sharingOn: root.sharingOn
-                onTargetEntered: root.dragHovered()
-                onTargetExited: dragLeave.restart()
                 onShelve: urls => root.dropped(() => root.shelve(urls))
                 onSendToClaude: (terminalId, urls) => root.dropped(() => root.sendToClaude(terminalId, urls))
                 onShare: urls => root.dropped(() => root.share(urls))

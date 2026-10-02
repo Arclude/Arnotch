@@ -21,3 +21,4 @@ tracing-subscriber.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
+qt-build-utils = "0.10"

@@ -9,18 +9,20 @@ Row {
     required property var claudeTerminals
     required property bool sharingOn
 
-    // Each tile is its own DropArea; the island tracks enter/exit to stay open.
-    signal targetEntered()
-    signal targetExited()
+    // The tile under the dragged files, -1 when none. Set on enter and cleared on exit
+    // only by the same tile, so it is right whatever order Qt sends the events in.
+    property int hoveredTile: -1
+    readonly property bool containsDrag: hoveredTile >= 0
+
     signal shelve(var urls)
     signal sendToClaude(string terminalId, var urls)
     signal share(var urls)
 
     readonly property var tiles: {
         const list = [{ kind: "shelf", glyph: "▤", title: qsTr("Keep on shelf"), subtitle: qsTr("Drag it out later") }]
-        for (const t of claudeTerminals.slice(0, 2)) {
+        for (const t of claudeTerminals.slice(0, 3)) {
             const folder = t.cwd.split("/").filter(Boolean).pop() ?? t.cwd
-            list.push({ kind: "claude", glyph: "@", title: qsTr("Send to Claude"), subtitle: folder, terminalId: t.id })
+            list.push({ kind: "claude", glyph: "@", title: qsTr("Send to Claude"), subtitle: `${folder} · ${t.app}`, terminalId: t.id })
         }
         list.push({ kind: "share", glyph: "↑", title: qsTr("Share link"),
                     subtitle: sharingOn ? qsTr("Upload and copy the link") : qsTr("Set up in settings") })
@@ -36,16 +38,22 @@ Row {
             id: tile
 
             required property var modelData
+            required property int index
 
             width: (targets.width - targets.spacing * (targets.tiles.length - 1)) / targets.tiles.length
             height: 86
 
             onEntered: drag => {
                 drag.accept(Qt.CopyAction)
-                targets.targetEntered()
+                targets.hoveredTile = index
             }
-            onExited: targets.targetExited()
+            onExited: {
+                if (targets.hoveredTile === index)
+                    targets.hoveredTile = -1
+            }
             onDropped: drop => {
+                console.info(`notch: dropped ${drop.urls.length} file(s) on the ${modelData.kind} target`)
+                targets.hoveredTile = -1
                 drop.accept(Qt.CopyAction)
                 const urls = drop.urls
                 if (modelData.kind === "shelf")
