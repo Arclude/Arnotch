@@ -1,12 +1,15 @@
 #include "app.h"
 
+#include <QAnimationDriver>
 #include <QDir>
 #include <QFile>
 #include <QIcon>
 #include <QLocale>
 #include <QQuickWindow>
 #include <QRegion>
+#include <QScreen>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QTranslator>
 
 namespace {
@@ -33,6 +36,49 @@ public:
         });
         return false;
     }
+};
+
+// Qt's software renderer advances animations from a 16 ms timer, so on a 144 or 180 Hz
+// display they move only every third frame or so. This driver advances them at the
+// display's rate instead (ARNOTCH_ANIMATION_HZ overrides it), and only while one runs.
+class DisplayRateDriver : public QAnimationDriver
+{
+public:
+    explicit DisplayRateDriver(QObject *parent)
+        : QAnimationDriver(parent)
+    {
+        timer.setTimerType(Qt::PreciseTimer);
+        connect(&timer, &QTimer::timeout, this, [this] { advance(); });
+    }
+
+protected:
+    void start() override
+    {
+        QAnimationDriver::start();
+        timer.start(intervalMs());
+    }
+
+    void stop() override
+    {
+        timer.stop();
+        QAnimationDriver::stop();
+    }
+
+private:
+    static int intervalMs()
+    {
+        qreal hz = qEnvironmentVariableIntValue("ARNOTCH_ANIMATION_HZ");
+        if (hz <= 0) {
+            hz = 60;
+            for (const QScreen *screen : QGuiApplication::screens())
+                hz = qMax(hz, screen->refreshRate());
+        }
+        // Rounded down: a tick too many is skipped by the compositor's frame pacing,
+        // one too few would drop a frame.
+        return qMax(1, int(1000 / hz));
+    }
+
+    QTimer timer;
 };
 
 } // namespace
@@ -69,6 +115,8 @@ std::unique_ptr<QApplication> notchAppNew()
     app->setWindowIcon(QIcon(QStringLiteral(":/icons/arnotch.svg")));
 
     app->installEventFilter(new InputMaskFilter(app.get()));
+    if (QQuickWindow::sceneGraphBackend() == QLatin1String("software"))
+        (new DisplayRateDriver(app.get()))->install();
 
     // The islands live on even when the settings window is closed.
     app->setQuitOnLastWindowClosed(false);

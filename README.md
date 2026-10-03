@@ -129,8 +129,10 @@ supports MPRIS (Spotify, Firefox, Chromium, VLC, mpv, ...) and follows the one t
 ## Performance
 
 The island uses Qt's software renderer by default: for a surface this small it needs about half
-the memory of a GPU context (≈35 MB PSS). It uses about 0.2% CPU when idle and 0.35% while an
+the memory of a GPU context (≈35 MB PSS). It uses about 0.2% CPU when idle and 0.5% while an
 agent works: animations only draw frames while something moves, and only while they are visible.
+They run at the display's refresh rate (144 Hz, 180 Hz, ...) rather than Qt's usual 60 steps a
+second; `ARNOTCH_ANIMATION_HZ` caps it.
 Set `ARNOTCH_RENDERER=gpu` to use the GPU instead.
 
 ## Claude Code integration

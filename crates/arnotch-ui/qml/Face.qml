@@ -63,8 +63,8 @@ Item {
                               : parent.height * 0.78
                         radius: width / 2
                         color: "#16181d"
-
-                        Behavior on height { NumberAnimation { duration: 70 } }
+                        // No animation on the height: a cartoon blink is instant, and at a high
+                        // refresh rate an eased one costs a dozen frames for no visible gain.
                     }
 
                     // "^" eye when happy
