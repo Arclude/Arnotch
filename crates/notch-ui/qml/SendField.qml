@@ -6,6 +6,7 @@ Rectangle {
 
     property string placeholder: qsTr("Type and press Enter…")
     property alias text: input.text
+    property bool monospace: true
 
     signal submitted(string text)
     signal cancelled()
@@ -41,7 +42,7 @@ Rectangle {
         color: "#f2f3f5"
         selectionColor: "#4c8dff"
         font.pixelSize: 12
-        font.family: "monospace"
+        font.family: field.monospace ? "monospace" : Qt.application.font.family
 
         Keys.onReturnPressed: {
             if (text.length > 0) {

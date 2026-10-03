@@ -8,10 +8,10 @@ use std::sync::{Mutex, OnceLock};
 
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
-use notch_core::event::UploadState;
+use notch_core::event::{ChatState, UploadState};
 use notch_core::i18n::{self, tr};
 use notch_core::terminals::{self, Terminal};
-use notch_core::{Decision, Event, clipboard, control, focus, ipc, share};
+use notch_core::{Decision, Event, chat, clipboard, control, focus, ipc, share};
 use tokio::sync::broadcast;
 
 #[cxx_qt::bridge]
@@ -74,6 +74,22 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "sendText"]
         fn send_text(self: &NotchBridge, id: &QString, text: &QString);
+
+        /// Sends a message to Claude in the island's chat and returns its turn number.
+        /// The answer arrives as `chat` events with that turn.
+        #[qinvokable]
+        #[cxx_name = "askClaude"]
+        fn ask_claude(self: &NotchBridge, prompt: &QString) -> u32;
+
+        /// Stops the answer being written.
+        #[qinvokable]
+        #[cxx_name = "stopChat"]
+        fn stop_chat(self: &NotchBridge);
+
+        /// Starts a new conversation; Claude forgets the previous one.
+        #[qinvokable]
+        #[cxx_name = "newChat"]
+        fn new_chat(self: &NotchBridge);
     }
 
     impl cxx_qt::Threading for NotchBridge {}
@@ -100,6 +116,25 @@ pub fn publish_terminals(terminals: Vec<Terminal>) {
     let event = Event::Terminals { terminals };
     *TERMINALS.lock().unwrap() = Some(event.clone());
     _ = event_bus().send(event);
+}
+
+/// The island's conversation with Claude, shared by every island window.
+struct Chat {
+    session_id: String,
+    turn: u32,
+    /// The `claude` process writing the current answer.
+    pid: Option<u32>,
+}
+
+static CHAT: Mutex<Option<Chat>> = Mutex::new(None);
+
+fn with_chat<T>(f: impl FnOnce(&mut Chat) -> T) -> T {
+    let mut chat = CHAT.lock().unwrap();
+    f(chat.get_or_insert_with(|| Chat {
+        session_id: chat::new_session_id(),
+        turn: 0,
+        pid: None,
+    }))
 }
 
 fn emit(bridge: Pin<&mut qobject::NotchBridge>, event: &Event) {
@@ -244,6 +279,78 @@ impl qobject::NotchBridge {
         let text = text.to_string();
         with_terminal(id, tr("Can't type into the terminal"), move |terminal| {
             control::send_text(terminal, &text, true)
+        });
+    }
+}
+
+impl qobject::NotchBridge {
+    pub fn ask_claude(&self, prompt: &QString) -> u32 {
+        let prompt = prompt.to_string();
+        // One answer at a time: a new message replaces the one being written.
+        let (session_id, turn) = with_chat(|chat| {
+            if let Some(pid) = chat.pid.take() {
+                chat::stop(pid);
+            }
+            chat.turn += 1;
+            (chat.session_id.clone(), chat.turn)
+        });
+        let send = move |state: ChatState, text: String| {
+            _ = event_bus().send(Event::Chat { turn, state, text });
+        };
+
+        std::thread::spawn(move || {
+            let result =
+                chat::ask(&session_id, chat::saved(&session_id), &prompt).and_then(|answer| {
+                    // Stopped before it started: don't let it run.
+                    let current = with_chat(|chat| {
+                        let current = chat.turn == turn && chat.session_id == session_id;
+                        if current {
+                            chat.pid = Some(answer.pid());
+                        }
+                        current
+                    });
+                    if !current {
+                        chat::stop(answer.pid());
+                    }
+                    answer.stream(|text| send(ChatState::Streaming, text.to_owned()))
+                });
+            // Still the current answer, or was it stopped or replaced?
+            let current = with_chat(|chat| {
+                let current =
+                    chat.turn == turn && chat.session_id == session_id && chat.pid.is_some();
+                if current {
+                    chat.pid = None;
+                }
+                current
+            });
+            match result {
+                _ if !current => send(ChatState::Stopped, String::new()),
+                Ok(()) => send(ChatState::Done, String::new()),
+                Err(err) => {
+                    tracing::warn!("chat: {err:#}");
+                    send(ChatState::Failed, format!("{err:#}"));
+                }
+            }
+        });
+        turn
+    }
+
+    pub fn stop_chat(&self) {
+        with_chat(|chat| {
+            if let Some(pid) = chat.pid.take() {
+                chat::stop(pid);
+            }
+            // Also stops an answer whose process is still starting.
+            chat.turn += 1;
+        });
+    }
+
+    pub fn new_chat(&self) {
+        with_chat(|chat| {
+            if let Some(pid) = chat.pid.take() {
+                chat::stop(pid);
+            }
+            chat.session_id = chat::new_session_id();
         });
     }
 }

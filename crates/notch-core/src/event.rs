@@ -55,6 +55,16 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
+    /// Part of Claude's answer in the island's chat; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Chat {
+        /// The message being answered, so a stopped answer's last pieces can be told apart.
+        turn: u32,
+        state: ChatState,
+        /// The next piece of the answer (`streaming`), or what went wrong (`failed`).
+        #[serde(skip_serializing_if = "String::is_empty")]
+        text: String,
+    },
     /// A permission request was answered or abandoned; published by the notch itself.
     #[serde(skip_deserializing)]
     PermissionClosed { request_id: String },
@@ -151,4 +161,13 @@ pub enum UploadState {
     Uploading,
     Done,
     Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatState {
+    Streaming,
+    Done,
+    Failed,
+    Stopped,
 }

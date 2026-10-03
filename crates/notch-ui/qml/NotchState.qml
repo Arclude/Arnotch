@@ -44,6 +44,20 @@ QtObject {
     // Files being shared: [{ id, file, progress, state }]
     property var uploads: []
     readonly property bool uploading: uploads.length > 0
+    // The island's chat with Claude: rows of { who: "user" | "claude", body,
+    // status: "streaming" | "done" | "failed" | "stopped" }. A failed answer's body is the error.
+    // A ListModel, so a new piece of the answer updates one row instead of rebuilding them all.
+    property ListModel chat: ListModel {
+        // ListModel is not reactive inside functions, so bindings depend on `revision`.
+        property int revision: 0
+    }
+    // The message being answered; chat events of other turns are leftovers of stopped answers.
+    property int chatTurn: 0
+    readonly property bool chatBusy: {
+        chat.revision // dependency
+        return chat.count > 0 && chat.get(chat.count - 1).status === "streaming"
+    }
+
     // A plain notification is on screen; it takes precedence over the activity card.
     property bool notifying: false
     property string time: Qt.formatTime(new Date(), "HH:mm")
@@ -89,6 +103,8 @@ QtObject {
             notifying = true
         } else if (ev.type === "upload") {
             handleUpload(ev)
+        } else if (ev.type === "chat") {
+            handleChat(ev)
         } else if (ev.type === "permission_closed") {
             closePermission(ev.request_id)
         } else if (ev.type === "terminals") {
@@ -218,6 +234,39 @@ QtObject {
             say(qsTr("Link copied"), ev.url, 6000)
         else
             say(qsTr("Couldn't share %1").arg(ev.file), ev.error, 8000)
+    }
+
+    // Shows the user's message and an empty answer that `chat` events fill in.
+    function startChatTurn(turn, prompt) {
+        // A new message replaces an answer still being written.
+        for (let i = 0; i < chat.count; i++) {
+            if (chat.get(i).status === "streaming")
+                chat.setProperty(i, "status", "stopped")
+        }
+        chatTurn = turn
+        chat.append({ who: "user", body: prompt, status: "done" })
+        chat.append({ who: "claude", body: "", status: "streaming" })
+        chat.revision++
+    }
+
+    function clearChat() {
+        chat.clear()
+        chatTurn = 0
+        chat.revision++
+    }
+
+    function handleChat(ev) {
+        const last = chat.count - 1
+        if (ev.turn !== chatTurn || last < 0)
+            return
+        if (ev.state === "streaming") {
+            chat.setProperty(last, "body", chat.get(last).body + ev.text)
+        } else {
+            chat.setProperty(last, "status", ev.state)
+            if (ev.state === "failed")
+                chat.setProperty(last, "body", ev.text)
+        }
+        chat.revision++
     }
 
     function addToShelf(paths) {

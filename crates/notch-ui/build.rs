@@ -22,6 +22,7 @@ fn main() {
         "qml/SendField.qml",
         "qml/DropTargets.qml",
         "qml/ShelfView.qml",
+        "qml/ChatView.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

@@ -52,12 +52,22 @@ Window {
                                      && (notch.focus.steps.length > 0 || !!notch.focus.permission)
     readonly property int expandedWidth: dragging ? 620
                                        : shownTab === "terminals" || shownTab === "shelf" ? 540
-                                       : showCard ? 640 : 470
+                                       : showCard || shownTab === "chat" ? 640 : 470
     readonly property int maxExpandedWidth: 640
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
-    readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.replying)
-    onWantsKeyboardChanged: if (wantsKeyboard) requestActivate()
+    readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.replying
+                                                       || shownTab === "chat")
+    // Later: the window must first lose Qt.WindowDoesNotAcceptFocus (see flags).
+    onWantsKeyboardChanged: if (wantsKeyboard) Qt.callLater(requestActivate)
+    // A text field keeps the island open when the pointer leaves; clicking another
+    // window (which takes the keyboard) closes it. The chat is kept for next time.
+    onActiveChanged: {
+        if (active)
+            closeDelay.stop()
+        else if (opened && wantsKeyboard)
+            closeDelay.restart()
+    }
 
     // The terminal running the focused Claude session, to send replies to.
     readonly property string replyTerminalId: {
@@ -312,6 +322,7 @@ Window {
                 Repeater {
                     model: [
                         { id: "activity", label: qsTr("Activity") },
+                        { id: "chat", label: qsTr("Chat") },
                         { id: "terminals", label: qsTr("Terminals") + "  " + root.notch.terminals.length },
                         { id: "shelf", label: qsTr("Shelf") + (root.notch.shelf.length ? "  " + root.notch.shelf.length : "") }
                     ]
@@ -421,6 +432,22 @@ Window {
                     root.bridge.sendFilesToClaude(terminalId, path)
                     root.opened = false
                 }
+            }
+
+            ChatView {
+                id: chatView
+                width: parent.width
+                visible: root.shownTab === "chat"
+                messages: root.notch.chat
+                busy: root.notch.chatBusy
+                mood: root.notch.mood
+                onAsked: text => root.notch.startChatTurn(root.bridge.askClaude(text), text)
+                onStopped: root.bridge.stopChat()
+                onCleared: {
+                    root.bridge.newChat()
+                    root.notch.clearChat()
+                }
+                onCancelled: root.opened = false
             }
 
             TerminalsView {
