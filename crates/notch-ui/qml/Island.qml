@@ -29,9 +29,10 @@ Window {
     }
 
     // Room around the island for its shadow.
-    // Only while open: the window must not be larger than the closed island, or its
-    // transparent margin would swallow clicks meant for the windows below.
     readonly property int pad: expanded ? 22 : 0
+    // Only the island takes input; the rest of the window lets clicks through to
+    // the windows below (applied as the window mask by app.cpp).
+    readonly property rect inputRect: Qt.rect(island.x, island.y, island.width, island.height)
 
     readonly property int collapsedWidth: 190
     // Matches the top panel by default, so the closed island never covers windows.
@@ -52,6 +53,7 @@ Window {
     readonly property int expandedWidth: dragging ? 620
                                        : shownTab === "terminals" || shownTab === "shelf" ? 540
                                        : showCard ? 640 : 470
+    readonly property int maxExpandedWidth: 640
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
     readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.replying)
@@ -77,7 +79,10 @@ Window {
                                      : notch.mood === "working" ? "#4c8dff"
                                      : "#34c759"
 
-    width: Math.max(island.width, expanded ? expandedWidth : collapsedWidth) + pad * 2
+    // Always as wide as the widest island: the compositor centres the window, so a
+    // width change would move it, and KWin keeps sending drag positions relative to
+    // where the window was when the drag entered (the drop targets were off by one).
+    width: maxExpandedWidth + 44
     height: Math.max(island.height, expanded ? expandedHeight : collapsedHeight) + pad
     x: Screen.virtualX + (Screen.width - width) / 2
     y: Screen.virtualY
@@ -89,7 +94,7 @@ Window {
     // only a drag that stays out for a moment really left the island.
     // Files are over the island or one of its targets. Leaving one area for the next
     // briefly reads false, so the island only closes when the drag stays out.
-    readonly property bool dragInside: islandDrop.containsDrag || dropTargets.containsDrag
+    readonly property bool dragInside: islandDrop.containsDrag
     onDragInsideChanged: {
         if (dragInside) {
             dragging = true
@@ -131,7 +136,8 @@ Window {
         opened = false
     }
 
-    // The whole island accepts files; the drop targets inside take priority.
+    // The whole island accepts files. It is the only DropArea: the tile under the
+    // pointer is worked out from the position, and dropping elsewhere shelves them.
     DropArea {
         id: islandDrop
         anchors.fill: parent
@@ -141,12 +147,21 @@ Window {
                 return
             }
             drag.accept(Qt.CopyAction)
+            dropTargets.hoveredTile = dropTargets.tileAt(islandDrop, drag.x, drag.y)
         }
+        onPositionChanged: drag => dropTargets.hoveredTile = dropTargets.tileAt(islandDrop, drag.x, drag.y)
+        onExited: dropTargets.hoveredTile = -1
         onDropped: drop => {
-            console.info(`notch: dropped ${drop.urls.length} file(s) on the island`)
             drop.accept(Qt.CopyAction)
             const urls = drop.urls
-            root.dropped(() => root.shelve(urls))
+            const index = dropTargets.tileAt(islandDrop, drop.x, drop.y)
+            if (index >= 0) {
+                root.dropped(() => dropTargets.dropOn(index, urls))
+            } else {
+                console.info(`notch: dropped ${urls.length} file(s) on the island`)
+                dropTargets.hoveredTile = -1
+                root.dropped(() => root.shelve(urls))
+            }
         }
     }
 

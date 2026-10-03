@@ -2,6 +2,7 @@ import QtQuick
 
 // Shown while files are dragged over the island: one tile per thing that can
 // be done with them. Dropping anywhere else on the island puts them on the shelf.
+// The island owns the DropArea and asks tileAt()/dropOn() where things land.
 Row {
     id: targets
 
@@ -9,10 +10,10 @@ Row {
     required property var claudeTerminals
     required property bool sharingOn
 
-    // The tile under the dragged files, -1 when none. Set on enter and cleared on exit
-    // only by the same tile, so it is right whatever order Qt sends the events in.
+    // The tile under the dragged files, -1 when none. The island's single DropArea sets
+    // it from the pointer position: nested DropAreas let the first one that grabbed
+    // the drag keep it, so the highlight lagged behind the pointer.
     property int hoveredTile: -1
-    readonly property bool containsDrag: hoveredTile >= 0
 
     signal shelve(var urls)
     signal sendToClaude(string terminalId, var urls)
@@ -31,38 +32,44 @@ Row {
 
     spacing: 8
 
+    // Index of the tile at (x, y) in `item`'s coordinates, -1 when none.
+    function tileAt(item, x, y) {
+        if (!visible)
+            return -1
+        const p = item.mapToItem(targets, x, y)
+        for (let i = 0; i < tileRepeater.count; i++) {
+            const t = tileRepeater.itemAt(i)
+            if (p.x >= t.x && p.x < t.x + t.width && p.y >= t.y && p.y < t.y + t.height)
+                return i
+        }
+        return -1
+    }
+
+    function dropOn(index, urls) {
+        const tile = tiles[index]
+        console.info(`notch: dropped ${urls.length} file(s) on the ${tile.kind} target`)
+        hoveredTile = -1
+        if (tile.kind === "shelf")
+            shelve(urls)
+        else if (tile.kind === "claude")
+            sendToClaude(tile.terminalId, urls)
+        else
+            share(urls)
+    }
+
     Repeater {
+        id: tileRepeater
         model: targets.tiles
 
-        DropArea {
+        Item {
             id: tile
 
             required property var modelData
             required property int index
+            readonly property bool containsDrag: targets.hoveredTile === index
 
             width: (targets.width - targets.spacing * (targets.tiles.length - 1)) / targets.tiles.length
             height: 86
-
-            onEntered: drag => {
-                drag.accept(Qt.CopyAction)
-                targets.hoveredTile = index
-            }
-            onExited: {
-                if (targets.hoveredTile === index)
-                    targets.hoveredTile = -1
-            }
-            onDropped: drop => {
-                console.info(`notch: dropped ${drop.urls.length} file(s) on the ${modelData.kind} target`)
-                targets.hoveredTile = -1
-                drop.accept(Qt.CopyAction)
-                const urls = drop.urls
-                if (modelData.kind === "shelf")
-                    targets.shelve(urls)
-                else if (modelData.kind === "claude")
-                    targets.sendToClaude(modelData.terminalId, urls)
-                else
-                    targets.share(urls)
-            }
 
             Rectangle {
                 anchors.fill: parent
