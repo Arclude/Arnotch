@@ -325,8 +325,8 @@ Window {
                 Text {
                     anchors.left: compactCover.right
                     anchors.leftMargin: 8
-                    anchors.right: compactPause.left
-                    anchors.rightMargin: (root.notch.sessions.count > 0 ? 48 : 8) + (root.notch.timer ? 60 : 0)
+                    anchors.right: compactCountdown.visible ? compactCountdown.left : compactPause.left
+                    anchors.rightMargin: compactCountdown.visible ? 10 : root.notch.sessions.count > 0 ? 48 : 8
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
                     textFormat: Text.StyledText
@@ -334,6 +334,19 @@ Window {
                           + (compactMedia.player.artist ? `<font color="#8b909a">  ${compactMedia.player.artist.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</font>` : "")
                     color: "#f2f3f5"
                     font.pixelSize: Math.min(12, Math.round(root.collapsedHeight * 0.42))
+                }
+                // The timer, left of the session count and the pause button
+                Text {
+                    id: compactCountdown
+                    anchors.right: parent.right
+                    anchors.rightMargin: root.notch.sessions.count > 0 ? 86 : 40
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.notch.timer !== null
+                    text: "⏱ " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
+                    color: "#ffb020"
+                    font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
+                    font.weight: Font.DemiBold
+                    font.features: { "tnum": 1 }
                 }
                 MediaCard.MediaButton {
                     id: compactPause
@@ -347,13 +360,10 @@ Window {
                 }
             }
 
-            // The timer's countdown: in place of the clock, or beside the song
+            // The timer's countdown in place of the clock (beside the song while one plays)
             Text {
-                visible: root.notch.timer !== null && !root.levelShown
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.horizontalCenter: root.mediaShown ? undefined : parent.horizontalCenter
-                anchors.right: root.mediaShown ? parent.right : undefined
-                anchors.rightMargin: root.notch.sessions.count > 0 ? 86 : 40
+                visible: root.notch.timer !== null && !root.levelShown && !root.mediaShown
+                anchors.centerIn: parent
                 text: "⏱ " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
                 color: "#ffb020"
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
