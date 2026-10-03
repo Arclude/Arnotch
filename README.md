@@ -132,6 +132,15 @@ level bar, and plugging in the charger shows the battery's charge. A battery tha
 PipeWire), brightness from KDE's screen brightness service and the battery from UPower; all
 three are event driven. Turn them off in the settings (*Indicators*).
 
+## Calendar
+
+Paste your calendar's secret iCalendar address in the settings (*Calendar*): in Google Calendar,
+Settings › your calendar › *Secret address in iCal format*; Outlook and iCloud offer one too.
+arnotch downloads it every 10 minutes. The *Activity* tab shows the meeting under way or coming
+next, with a **Join** button when it has a Meet, Zoom or Teams link, and the island opens ten
+minutes before a meeting and when it starts. Recurring meetings, cancelled and moved instances
+are handled. The address is a secret: it is never logged.
+
 ## Media
 
 The *Activity* tab shows what's playing, with its cover and previous, play/pause and next

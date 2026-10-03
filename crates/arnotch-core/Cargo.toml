@@ -13,3 +13,6 @@ tracing.workspace = true
 libc.workspace = true
 similar.workspace = true
 zbus.workspace = true
+rrule.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true

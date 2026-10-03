@@ -91,6 +91,12 @@ pub mod qobject {
         #[cxx_name = "mediaCommand"]
         fn media_command(self: &NotchBridge, bus_name: &QString, command: &QString);
 
+        /// The calendar's iCalendar address (empty: no calendar). Meetings arrive as
+        /// `calendar` events.
+        #[qinvokable]
+        #[cxx_name = "setCalendarUrl"]
+        fn set_calendar_url(self: &NotchBridge, url: &QString);
+
         /// Puts text back on the clipboard.
         #[qinvokable]
         #[cxx_name = "copyText"]
@@ -149,6 +155,18 @@ fn with_chat<T>(f: impl FnOnce(&mut Chat) -> T) -> T {
 
 /// What's playing, replayed to bridges created after it was published.
 static MEDIA: Mutex<Option<Event>> = Mutex::new(None);
+/// The upcoming meetings, likewise.
+static CALENDAR: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_calendar(meetings: Vec<arnotch_core::calendar::Meeting>) {
+    let event = Event::Calendar { meetings };
+    *CALENDAR.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
+
+/// Tells the calendar thread about a new address.
+pub static CALENDAR_URL: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+
 /// The clipboard history, likewise.
 static CLIPBOARD: Mutex<Option<Event>> = Mutex::new(None);
 
@@ -376,6 +394,12 @@ impl qobject::NotchBridge {
         });
     }
 
+    pub fn set_calendar_url(&self, url: &QString) {
+        if let Some(tx) = CALENDAR_URL.get() {
+            _ = tx.send(url.to_string());
+        }
+    }
+
     pub fn copy_text(&self, text: &QString) {
         let text = text.to_string();
         std::thread::spawn(move || {
@@ -441,6 +465,7 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
             TERMINALS.lock().unwrap().clone(),
             MEDIA.lock().unwrap().clone(),
             CLIPBOARD.lock().unwrap().clone(),
+            CALENDAR.lock().unwrap().clone(),
         ];
         for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));

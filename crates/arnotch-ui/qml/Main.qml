@@ -29,6 +29,9 @@ QtObject {
         property bool liveActivity: true
         // Show volume, brightness and battery changes in the island
         property bool indicators: true
+        // The calendar's iCalendar (ICS) address, a secret; empty for no calendar
+        property string calendarUrl: ""
+        onCalendarUrlChanged: app.bridge.setCalendarUrl(calendarUrl)
     }
 
     property NotchState state: NotchState {
@@ -69,6 +72,7 @@ QtObject {
     }
 
     property NotchBridge bridge: NotchBridge {
+        Component.onCompleted: setCalendarUrl(app.settings.calendarUrl)
         onEventReceived: json => {
             const ev = JSON.parse(json)
             if (ev.type === "open_settings")

@@ -17,6 +17,9 @@ anyhow = "1"
 libc = "0.2"
 similar = "3"
 tracing = "0.1"
+rrule = "0.14"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+chrono-tz = "0.10"
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 cxx = "1"

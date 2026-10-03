@@ -86,6 +86,11 @@ pub enum Event {
     /// notch itself.
     #[serde(skip_deserializing)]
     Clipboard { items: Vec<crate::clipboard::Entry> },
+    /// Meetings coming up in the next 24 hours; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Calendar {
+        meetings: Vec<crate::calendar::Meeting>,
+    },
     /// What's playing, `None` when no player has a track; published by the notch itself.
     #[serde(skip_deserializing)]
     Media {

@@ -35,6 +35,12 @@ fn main() -> anyhow::Result<()> {
 
     spawn_system_watchers()?;
 
+    let (calendar_url, urls) = std::sync::mpsc::channel();
+    _ = bridge::CALENDAR_URL.set(calendar_url);
+    std::thread::Builder::new()
+        .name("notch-calendar".into())
+        .spawn(move || watch_calendar(urls))?;
+
     std::thread::Builder::new()
         .name("notch-clipboard".into())
         .spawn(|| {
@@ -136,6 +142,45 @@ fn spawn_system_watchers() -> std::io::Result<()> {
             }
         })?;
     Ok(())
+}
+
+/// Downloads the calendar every 10 minutes, and right away when its address changes.
+fn watch_calendar(urls: std::sync::mpsc::Receiver<String>) {
+    use arnotch_core::calendar;
+    use std::sync::mpsc::RecvTimeoutError;
+
+    let mut url = String::new();
+    let mut shown = None;
+    loop {
+        let wait = if url.is_empty() {
+            Duration::MAX
+        } else {
+            Duration::from_secs(600)
+        };
+        match urls.recv_timeout(wait) {
+            Ok(new) if new == url && shown.is_some() => continue,
+            Ok(new) => url = new.trim().to_owned(),
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
+        if url.is_empty() {
+            shown = None;
+            bridge::publish_calendar(Vec::new());
+            continue;
+        }
+        match calendar::fetch(&url) {
+            Ok(ics) => {
+                let meetings =
+                    calendar::upcoming(&ics, chrono::Utc::now(), chrono::Duration::hours(24));
+                if shown.as_ref() != Some(&meetings) {
+                    shown = Some(meetings.clone());
+                    bridge::publish_calendar(meetings);
+                }
+            }
+            // The error never contains the address, which is a secret.
+            Err(err) => tracing::warn!("calendar: {err:#}"),
+        }
+    }
 }
 
 fn finished_notification(done: &Finished) -> Event {

@@ -534,6 +534,13 @@ Window {
                 }
             }
 
+            MeetingRow {
+                width: parent.width
+                visible: root.onActivity && root.notch.nextMeeting !== null && (!root.showCard || root.opened)
+                meeting: root.notch.nextMeeting ?? ({ title: "", start: 0, end: 0, link: "" })
+                now: root.notch.now
+            }
+
             // Under the session card too, when the user opened the island (not when it
             // peeks on its own to show activity).
             MediaCard {

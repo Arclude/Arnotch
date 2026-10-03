@@ -146,6 +146,16 @@ ApplicationWindow {
                 onToggled: win.settings.liveActivity = checked
             }
 
+            Label { text: qsTr("Calendar") }
+            TextField {
+                Layout.fillWidth: true
+                // The address gives access to the calendar: shown only while edited.
+                echoMode: TextInput.PasswordEchoOnEdit
+                placeholderText: qsTr("Secret iCal address (.ics)")
+                text: win.settings.calendarUrl
+                onEditingFinished: win.settings.calendarUrl = text.trim()
+            }
+
             Label { text: qsTr("Indicators") }
             Switch {
                 text: qsTr("Show volume, brightness and battery changes")

@@ -48,6 +48,15 @@ QtObject {
     // Main binds this to the setting.
     property bool indicators: true
 
+    // Meetings in the next 24 hours: [{ title, start, end, link }] (Unix seconds)
+    property var meetings: []
+    // Milliseconds since the epoch, updated once a minute with the clock
+    property real now: Date.now()
+    // The meeting under way or coming next, null when there is none
+    readonly property var nextMeeting: meetings.find(m => m.end * 1000 > now) ?? null
+    // Reminders already given, by start and title
+    property var reminded: ({})
+
     // Latest text entries of the clipboard history, newest first
     property var clipboard: []
 
@@ -125,6 +134,9 @@ QtObject {
                 showLevel(ev.kind, ev.value, ev.muted)
         } else if (ev.type === "battery") {
             handleBattery(ev.battery)
+        } else if (ev.type === "calendar") {
+            meetings = ev.meetings
+            remindMeetings()
         } else if (ev.type === "clipboard") {
             clipboard = ev.items
         } else if (ev.type === "media") {
@@ -297,6 +309,23 @@ QtObject {
             chatFinished(ev.state, chat.get(last).body)
     }
 
+    // Ten minutes before a meeting, and when it starts, the island opens to say so.
+    function remindMeetings() {
+        for (const m of meetings) {
+            const minutes = (m.start * 1000 - now) / 60000
+            const key = m.start + m.title
+            const stage = minutes > 0 && minutes <= 10 ? "soon" : minutes <= 0 && minutes > -2 ? "now" : ""
+            if (!stage || reminded[key] === stage || (stage === "soon" && reminded[key] === "now"))
+                continue
+            reminded[key] = stage
+            if (stage === "soon")
+                say(qsTr("In %1 min: %2").arg(Math.ceil(minutes)).arg(m.title), Qt.formatTime(new Date(m.start * 1000), "HH:mm"), 15000)
+            else
+                say(qsTr("Starting now: %1").arg(m.title), Qt.formatTime(new Date(m.start * 1000), "HH:mm"), 15000)
+            notifying = true
+        }
+    }
+
     function showLevel(kind, value, muted) {
         level = { kind: kind, value: value, muted: muted }
         levelTimer.restart()
@@ -380,6 +409,8 @@ QtObject {
         running: true
         onTriggered: {
             notch.time = Qt.formatTime(new Date(), "HH:mm")
+            notch.now = Date.now()
+            notch.remindMeetings()
             interval = 60000 - Date.now() % 60000 + 50
             restart()
         }
