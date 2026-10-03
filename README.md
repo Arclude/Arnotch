@@ -42,6 +42,7 @@ cargo build --release
 ./target/release/arnotchctl notify "Hello" "from arnotch"
 ./target/release/arnotchctl open terminals   # or: open activity|chat|shelf, close
 ./target/release/arnotchctl toggle chat      # open on a tab, or close it (for shortcuts)
+./target/release/arnotchctl timer 25m Focus  # start a timer (or: timer cancel)
 ./target/release/arnotchctl settings
 ./target/release/arnotchctl terminals        # list open terminals as JSON
 ```
@@ -147,6 +148,14 @@ level bar, and plugging in the charger shows the battery's charge. A battery tha
 20%, 10% and 5% opens the island with a warning. Volume comes from `pactl` (PulseAudio or
 PipeWire), brightness from KDE's screen brightness service and the battery from UPower; all
 three are event driven. Turn them off in the settings (*Indicators*).
+
+## Timer
+
+The *Activity* tab starts a 5, 15 or 25 minute timer, or a custom one (`10 laundry`,
+`1h30m focus`); `arnotchctl timer 25m Focus` and `arnotchctl timer cancel` do it from a terminal.
+The closed island counts down in place of the clock (beside the song while music plays), and
+when time is up the island opens and plays the sound theme's alarm. A running timer survives a
+restart.
 
 ## Phone
 

@@ -38,6 +38,14 @@ pub enum Event {
     },
     /// Close the island.
     Close,
+    /// Start a timer: `arnotchctl timer 25m Focus`.
+    Timer {
+        seconds: u64,
+        #[serde(default)]
+        label: String,
+    },
+    /// Cancel the running timer.
+    TimerCancel,
     /// Put files (absolute paths) on the shelf.
     Shelve { paths: Vec<String> },
     /// Show files (absolute paths) with the drop targets to pick where they go, e.g. a

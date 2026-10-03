@@ -4,6 +4,8 @@
 //!   arnotchctl open [tab]              open the island (tabs: activity, chat, terminals, shelf)
 //!   arnotchctl toggle [tab]            open the island on a tab, or close it if it shows that tab
 //!   arnotchctl close                   close the island
+//!   arnotchctl timer <time> [label]    start a timer: 25m, 1h30m, 90s, 10 (minutes)
+//!   arnotchctl timer cancel            cancel it
 //!   arnotchctl shelf <file>...         put files on the shelf
 //!   arnotchctl share <file>            upload a file and copy its link
 //!   arnotchctl screenshot              select a region (Spectacle), then pick where it goes
@@ -27,6 +29,7 @@ const USAGE: &str = "usage:
   arnotchctl open [activity|chat|terminals|shelf]
   arnotchctl toggle [activity|chat|terminals|shelf]
   arnotchctl close
+  arnotchctl timer <25m|1h30m|90s|10> [label] | cancel
   arnotchctl shelf <file>...
   arnotchctl share <file>
   arnotchctl screenshot
@@ -52,6 +55,17 @@ fn main() -> ExitCode {
             tab: rest.first().map(|tab| (*tab).to_owned()),
         }),
         ["close"] => send(&Event::Close),
+        ["timer", "cancel"] => send(&Event::TimerCancel),
+        ["timer", time, label @ ..] => match arnotch_core::system::parse_duration(time) {
+            Some(seconds) if seconds > 0 => send(&Event::Timer {
+                seconds,
+                label: label.join(" "),
+            }),
+            _ => {
+                eprintln!("arnotchctl: the time must look like 25m, 1h30m, 90s or 10 (minutes)");
+                ExitCode::from(2)
+            }
+        },
         ["answer", decision] => {
             match serde_json::from_value::<Decision>(serde_json::json!(decision)) {
                 Ok(decision) => send(&Event::Answer {

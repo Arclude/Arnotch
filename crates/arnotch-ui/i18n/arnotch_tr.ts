@@ -335,7 +335,7 @@
     <message>
         <location filename="../qml/MeetingRow.qml" line="56"/>
         <source>Under way, until %1</source>
-        <translation>Devam ediyor, %1&apos;e kadar</translation>
+        <translation>Devam ediyor, bitiş %1</translation>
     </message>
     <message>
         <location filename="../qml/MeetingRow.qml" line="57"/>
@@ -361,103 +361,113 @@
         <translation>Her şey sakin</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="227"/>
+        <location filename="../qml/NotchState.qml" line="239"/>
         <source>Finished</source>
         <translation>Bitti</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="229"/>
+        <location filename="../qml/NotchState.qml" line="241"/>
         <source>Needs your attention</source>
         <translation>Seni bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="233"/>
+        <location filename="../qml/NotchState.qml" line="245"/>
         <source>Plan ready for review</source>
         <translation>Plan onayını bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="233"/>
+        <location filename="../qml/NotchState.qml" line="245"/>
         <source>Claude has a question</source>
         <translation>Claude&apos;un bir sorusu var</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="234"/>
+        <location filename="../qml/NotchState.qml" line="246"/>
         <source>Wants to run %1</source>
         <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="238"/>
+        <location filename="../qml/NotchState.qml" line="250"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="307"/>
+        <location filename="../qml/NotchState.qml" line="319"/>
         <source>Link copied</source>
         <translation>Link kopyalandı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="309"/>
+        <location filename="../qml/NotchState.qml" line="321"/>
         <source>Couldn&apos;t share %1</source>
         <translation>%1 paylaşılamadı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="361"/>
+        <location filename="../qml/NotchState.qml" line="383"/>
         <source>%1: battery low</source>
         <translation>%1: pil azaldı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="373"/>
+        <location filename="../qml/NotchState.qml" line="395"/>
         <source>Unknown number</source>
         <translation>Bilinmeyen numara</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="375"/>
+        <location filename="../qml/NotchState.qml" line="397"/>
         <source>📞 Calling: %1</source>
         <translation>📞 Arıyor: %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="377"/>
+        <location filename="../qml/NotchState.qml" line="399"/>
         <source>Missed call: %1</source>
         <translation>Cevapsız arama: %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="382"/>
+        <location filename="../qml/NotchState.qml" line="404"/>
         <source>💬 %1</source>
         <translation>💬 %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="382"/>
+        <location filename="../qml/NotchState.qml" line="404"/>
         <source>Message</source>
         <translation>Mesaj</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="402"/>
+        <location filename="../qml/NotchState.qml" line="424"/>
         <source>%1% of your 5-hour Claude limit used</source>
-        <translation>5 saatlik Claude limitinin %%1&apos;i doldu</translation>
+        <translation>5 saatlik Claude limiti: %%1 kullanıldı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="403"/>
+        <location filename="../qml/NotchState.qml" line="425"/>
         <source>Resets at %1</source>
         <translation>Sıfırlanma: %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="420"/>
+        <location filename="../qml/NotchState.qml" line="442"/>
         <source>In %1 min: %2</source>
         <translation>%1 dk sonra: %2</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="422"/>
+        <location filename="../qml/NotchState.qml" line="444"/>
         <source>Starting now: %1</source>
         <translation>Şimdi başlıyor: %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="443"/>
+        <location filename="../qml/NotchState.qml" line="465"/>
         <source>Battery low</source>
         <translation>Pil azaldı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="361"/>
-        <location filename="../qml/NotchState.qml" line="443"/>
+        <location filename="../qml/NotchState.qml" line="533"/>
+        <source>⏰ Time&apos;s up</source>
+        <translation>⏰ Süre doldu</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="533"/>
+        <source>Timer</source>
+        <translation>Zamanlayıcı</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="383"/>
+        <location filename="../qml/NotchState.qml" line="465"/>
         <source>%1% left</source>
         <translation>%%1 kaldı</translation>
     </message>
@@ -824,6 +834,44 @@
         <location filename="../qml/TerminalsView.qml" line="190"/>
         <source>Run a command…</source>
         <translation>Bir komut çalıştır…</translation>
+    </message>
+</context>
+<context>
+    <name>TimerRow</name>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="62"/>
+        <source>%1 min</source>
+        <translation>%1 dk</translation>
+    </message>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="68"/>
+        <source>Custom…</source>
+        <translation>Özel…</translation>
+    </message>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="78"/>
+        <source>Time and label, e.g. 10 laundry or 1h30m focus (Esc cancels)</source>
+        <translation>Süre ve etiket, örn. 10 çamaşır ya da 1h30m odak (Esc iptal)</translation>
+    </message>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="117"/>
+        <source>Timer</source>
+        <translation>Zamanlayıcı</translation>
+    </message>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="118"/>
+        <source>ends at %1</source>
+        <translation>bitiş %1</translation>
+    </message>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="143"/>
+        <source>+5 min</source>
+        <translation>+5 dk</translation>
+    </message>
+    <message>
+        <location filename="../qml/TimerRow.qml" line="149"/>
+        <source>Cancel the timer</source>
+        <translation>Zamanlayıcıyı iptal et</translation>
     </message>
 </context>
 </TS>

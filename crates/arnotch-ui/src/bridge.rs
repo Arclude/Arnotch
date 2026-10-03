@@ -113,6 +113,11 @@ pub mod qobject {
         #[cxx_name = "setCalendarUrl"]
         fn set_calendar_url(self: &NotchBridge, url: &QString);
 
+        /// Plays a sound of the desktop's sound theme, e.g. "alarm-clock-elapsed".
+        #[qinvokable]
+        #[cxx_name = "playSound"]
+        fn play_sound(self: &NotchBridge, name: &QString);
+
         /// Puts text back on the clipboard.
         #[qinvokable]
         #[cxx_name = "copyText"]
@@ -445,6 +450,10 @@ impl qobject::NotchBridge {
         if let Some(tx) = CALENDAR_URL.get() {
             _ = tx.send(url.to_string());
         }
+    }
+
+    pub fn play_sound(&self, name: &QString) {
+        arnotch_core::system::play_sound(&name.to_string());
     }
 
     pub fn copy_text(&self, text: &QString) {

@@ -29,6 +29,7 @@ fn main() {
         "qml/PromptPanel.qml",
         "qml/LimitsRow.qml",
         "qml/AttachDialog.qml",
+        "qml/TimerRow.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

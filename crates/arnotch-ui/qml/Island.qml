@@ -78,6 +78,7 @@ Window {
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
     readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.wantsKeyboard
+                                                       || timerRow.editing
                                                        || shownTab === "chat")
     // Later: the window must first lose Qt.WindowDoesNotAcceptFocus (see flags).
     onWantsKeyboardChanged: if (wantsKeyboard) Qt.callLater(requestActivate)
@@ -238,7 +239,8 @@ Window {
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.expanded ? root.expandedWidth : root.levelShown ? 310
-             : root.mediaShown ? (root.notch.sessions.count > 0 ? 420 : 380) : root.collapsedWidth
+             : root.mediaShown ? (root.notch.sessions.count > 0 ? 420 : 380) + (root.notch.timer ? 60 : 0)
+             : root.collapsedWidth
         height: root.expanded ? root.expandedHeight : root.collapsedHeight
         topLeftRadius: 0
         topRightRadius: 0
@@ -324,7 +326,7 @@ Window {
                     anchors.left: compactCover.right
                     anchors.leftMargin: 8
                     anchors.right: compactPause.left
-                    anchors.rightMargin: root.notch.sessions.count > 0 ? 48 : 8
+                    anchors.rightMargin: (root.notch.sessions.count > 0 ? 48 : 8) + (root.notch.timer ? 60 : 0)
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
                     textFormat: Text.StyledText
@@ -345,9 +347,23 @@ Window {
                 }
             }
 
+            // The timer's countdown: in place of the clock, or beside the song
+            Text {
+                visible: root.notch.timer !== null && !root.levelShown
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.horizontalCenter: root.mediaShown ? undefined : parent.horizontalCenter
+                anchors.right: root.mediaShown ? parent.right : undefined
+                anchors.rightMargin: root.notch.sessions.count > 0 ? 86 : 40
+                text: "⏱ " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
+                color: "#ffb020"
+                font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
+                font.weight: Font.DemiBold
+                font.features: { "tnum": 1 }
+            }
+
             Text {
                 anchors.centerIn: parent
-                visible: root.settings.showClock && !root.levelShown && !root.mediaShown
+                visible: root.settings.showClock && !root.levelShown && !root.mediaShown && root.notch.timer === null
                 text: root.notch.time
                 color: "#f2f3f5"
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
@@ -663,6 +679,17 @@ Window {
                     color: "#34c759"
                     font.pixelSize: 11
                 }
+            }
+
+            TimerRow {
+                id: timerRow
+                width: parent.width
+                visible: root.onActivity && (root.opened || root.notch.timer !== null) && !root.targetsShown
+                timer: root.notch.timer
+                now: root.notch.timerNow
+                onStarted: (seconds, label) => root.notch.startTimer(seconds, label)
+                onCancelled: root.notch.timer = null
+                onExtended: seconds => root.notch.extendTimer(seconds)
             }
 
             LimitsRow {

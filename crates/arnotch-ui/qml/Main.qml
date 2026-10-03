@@ -29,6 +29,8 @@ QtObject {
         property bool liveActivity: true
         // Show volume, brightness and battery changes in the island
         property bool indicators: true
+        // The running timer as JSON ({ label, endsAt, total }), empty when none
+        property string timer: ""
         // Calls, messages and the battery of the phone (KDE Connect)
         property bool phone: true
         // Chat: let Claude search the web, and read files on this computer (read-only)
@@ -51,8 +53,18 @@ QtObject {
             } catch (e) {
                 shelf = []
             }
+            try {
+                if (app.settings.timer)
+                    timer = JSON.parse(app.settings.timer)
+            } catch (e) {
+                timer = null
+            }
         }
         onShelfChanged: app.settings.shelf = JSON.stringify(shelf)
+
+        // The timer survives restarts; one that ran out meanwhile still rings once.
+        onTimerChanged: app.settings.timer = timer ? JSON.stringify(timer) : ""
+        onTimerFinished: app.bridge.playSound("alarm-clock-elapsed")
 
         // An answer that finished while nobody looks at the chat gets a short note.
         onChatFinished: (status, body) => {

@@ -187,9 +187,58 @@ pub fn watch_battery(on_change: impl Fn(Battery)) -> zbus::Result<()> {
     Ok(())
 }
 
+/// A duration such as "25m", "1h30m", "90s" or "10" (minutes), in seconds.
+pub fn parse_duration(text: &str) -> Option<u64> {
+    let text = text.trim().to_ascii_lowercase();
+    if let Ok(minutes) = text.parse::<u64>() {
+        return Some(minutes * 60);
+    }
+    let (mut total, mut number) = (0u64, String::new());
+    for c in text.chars() {
+        match c {
+            '0'..='9' => number.push(c),
+            'h' | 'm' | 's' if !number.is_empty() => {
+                let n: u64 = number.parse().ok()?;
+                number.clear();
+                total += n * match c {
+                    'h' => 3600,
+                    'm' => 60,
+                    _ => 1,
+                };
+            }
+            ' ' => {}
+            _ => return None,
+        }
+    }
+    (number.is_empty() && total > 0).then_some(total)
+}
+
+/// Plays a sound of the desktop's sound theme, such as "alarm-clock-elapsed", without
+/// waiting for it.
+pub fn play_sound(name: &str) {
+    let themed = Command::new("canberra-gtk-play").args(["-i", name]).spawn();
+    if themed.is_err() {
+        _ = Command::new("paplay")
+            .arg(format!("/usr/share/sounds/freedesktop/stereo/{name}.oga"))
+            .spawn();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_durations() {
+        assert_eq!(parse_duration("25m"), Some(1500));
+        assert_eq!(parse_duration("1h30m"), Some(5400));
+        assert_eq!(parse_duration("90s"), Some(90));
+        assert_eq!(parse_duration("10"), Some(600));
+        assert_eq!(parse_duration("1h 5m"), Some(3900));
+        assert_eq!(parse_duration("m"), None);
+        assert_eq!(parse_duration("0"), Some(0));
+        assert_eq!(parse_duration("soon"), None);
+    }
 
     #[test]
     fn reads_pactl_volume() {

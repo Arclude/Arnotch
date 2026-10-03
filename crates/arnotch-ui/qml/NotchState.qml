@@ -57,6 +57,14 @@ QtObject {
     // Limit warnings already given, by window reset time and threshold
     property var limitWarned: ({})
 
+    // The running timer: { label, endsAt, total } in milliseconds, or null. Main keeps it
+    // in the settings, so it survives a restart.
+    property var timer: null
+    // Milliseconds since the epoch, every second while a timer runs
+    property real timerNow: Date.now()
+    // A timer ran out: Main plays a sound.
+    signal timerFinished(string label)
+
     // The phone (KDE Connect) in reach: { device, percent, charging }, null when none
     property var phone: null
     // Main binds this to the setting.
@@ -156,6 +164,10 @@ QtObject {
                 showLevel(ev.kind, ev.value, ev.muted)
         } else if (ev.type === "battery") {
             handleBattery(ev.battery)
+        } else if (ev.type === "timer") {
+            startTimer(ev.seconds, ev.label)
+        } else if (ev.type === "timer_cancel") {
+            timer = null
         } else if (ev.type === "phone") {
             handlePhone(ev)
         } else if (ev.type === "usage") {
@@ -353,6 +365,16 @@ QtObject {
             chatFinished(ev.state, chat.get(last).body)
     }
 
+    function startTimer(seconds, label) {
+        timerNow = Date.now()
+        timer = { label: label ?? "", endsAt: timerNow + seconds * 1000, total: seconds * 1000 }
+    }
+
+    function extendTimer(seconds) {
+        if (timer)
+            timer = Object.assign({}, timer, { endsAt: timer.endsAt + seconds * 1000, total: timer.total + seconds * 1000 })
+    }
+
     function handlePhone(ev) {
         if (ev.kind === "battery") {
             const before = phone
@@ -496,6 +518,24 @@ QtObject {
     property Timer activityTimer: Timer { interval: 3500 }
     property Timer levelTimer: Timer { interval: 1600 }
     property Timer pauseGrace: Timer { interval: 30000 }
+
+    // Ticks the countdown, and rings when the timer runs out.
+    property Timer timerTick: Timer {
+        interval: 1000
+        repeat: true
+        running: notch.timer !== null
+        triggeredOnStart: true
+        onTriggered: {
+            notch.timerNow = Date.now()
+            if (notch.timer && notch.timerNow >= notch.timer.endsAt) {
+                const label = notch.timer.label
+                notch.timer = null
+                notch.say(qsTr("⏰ Time's up"), label || qsTr("Timer"), 20000)
+                notch.notifying = true
+                notch.timerFinished(label)
+            }
+        }
+    }
 
     property Timer happyTimer: Timer {
         interval: 3000
