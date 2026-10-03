@@ -519,9 +519,11 @@ Window {
                 }
             }
 
+            // Under the session card too, when the user opened the island (not when it
+            // peeks on its own to show activity).
             MediaCard {
                 width: parent.width
-                visible: root.onActivity && !root.showCard && root.notch.media !== null
+                visible: root.onActivity && root.notch.media !== null && (!root.showCard || root.opened)
                 player: root.notch.media ?? ({ bus_name: "", identity: "", title: "", artist: "", art_url: "",
                                                playing: false, can_go_next: false, can_go_previous: false })
                 bridge: root.bridge
