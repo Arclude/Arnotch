@@ -45,6 +45,18 @@ cargo build --release
 ./target/release/notchctl terminals        # list open terminals as JSON
 ```
 
+## Install
+
+```sh
+contrib/install.sh          # build, install to ~/.local/bin and start with every session
+contrib/install.sh --hooks  # also add the Claude Code hooks to ~/.claude/settings.json
+contrib/install.sh --uninstall
+```
+
+notch runs as the systemd user service `notch.service`, tied to the graphical session and
+restarted if it crashes. Its log: `journalctl --user -u notch`. Run the script again after
+pulling changes to update.
+
 ## Terminals
 
 The *Terminals* tab lists every open terminal tab with the command running in it, its folder,
@@ -101,7 +113,7 @@ while they are visible. Set `NOTCH_RENDERER=gpu` to use the GPU instead.
 
 ## Claude Code integration
 
-Put `notchctl` on your `PATH` and merge [`contrib/claude-code-hooks.json`](contrib/claude-code-hooks.json)
+Run `contrib/install.sh --hooks`, or put `notchctl` on your `PATH` and merge [`contrib/claude-code-hooks.json`](contrib/claude-code-hooks.json)
 into `~/.claude/settings.json`. Every Claude Code session will then show up in the island,
 with its recent steps, a live diff of each file edit and the output of commands such as test runs.
 The hook takes about 1 ms and never fails or blocks, even when the notch is not running.
