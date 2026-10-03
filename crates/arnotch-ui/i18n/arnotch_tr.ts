@@ -163,42 +163,42 @@
 <context>
     <name>DropTargets</name>
     <message>
-        <location filename="../qml/DropTargets.qml" line="24"/>
+        <location filename="../qml/DropTargets.qml" line="27"/>
         <source>Keep on shelf</source>
         <translation>Rafa koy</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="24"/>
+        <location filename="../qml/DropTargets.qml" line="27"/>
         <source>Drag it out later</source>
         <translation>Sonra geri sürükle</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="27"/>
+        <location filename="../qml/DropTargets.qml" line="30"/>
         <source>Send to Claude</source>
         <translation>Claude&apos;a gönder</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="29"/>
+        <location filename="../qml/DropTargets.qml" line="32"/>
         <source>Ask in chat</source>
         <translation>Sohbette sor</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="29"/>
+        <location filename="../qml/DropTargets.qml" line="32"/>
         <source>Attach to a message</source>
         <translation>Mesaja ekle</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="30"/>
+        <location filename="../qml/DropTargets.qml" line="33"/>
         <source>Share link</source>
         <translation>Paylaşım linki</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="31"/>
+        <location filename="../qml/DropTargets.qml" line="34"/>
         <source>Upload and copy the link</source>
         <translation>Yükle ve linki kopyala</translation>
     </message>
     <message>
-        <location filename="../qml/DropTargets.qml" line="31"/>
+        <location filename="../qml/DropTargets.qml" line="34"/>
         <source>Set up in settings</source>
         <translation>Ayarlardan aç</translation>
     </message>
@@ -206,39 +206,44 @@
 <context>
     <name>Island</name>
     <message>
-        <location filename="../qml/Island.qml" line="322"/>
+        <location filename="../qml/Island.qml" line="343"/>
         <source>Pause</source>
         <translation>Duraklat</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="322"/>
+        <location filename="../qml/Island.qml" line="343"/>
         <source>Play</source>
         <translation>Oynat</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="393"/>
+        <location filename="../qml/Island.qml" line="414"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="394"/>
+        <location filename="../qml/Island.qml" line="415"/>
         <source>Chat</source>
         <translation>Sohbet</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="395"/>
+        <location filename="../qml/Island.qml" line="416"/>
         <source>Terminals</source>
         <translation>Terminaller</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="396"/>
+        <location filename="../qml/Island.qml" line="417"/>
         <source>Shelf</source>
         <translation>Raf</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="449"/>
+        <location filename="../qml/Island.qml" line="470"/>
         <source>Uploading %1</source>
         <translation>%1 yükleniyor</translation>
+    </message>
+    <message>
+        <location filename="../qml/Island.qml" line="505"/>
+        <source>Where should %1 go?</source>
+        <translation>%1 nereye gitsin?</translation>
     </message>
 </context>
 <context>
@@ -272,27 +277,27 @@
         <translation>Claude cevap veremedi</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="173"/>
+        <location filename="../qml/Main.qml" line="182"/>
         <source>Settings…</source>
         <translation>Ayarlar…</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="177"/>
+        <location filename="../qml/Main.qml" line="186"/>
         <source>Send a test notification</source>
         <translation>Deneme bildirimi gönder</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="178"/>
+        <location filename="../qml/Main.qml" line="187"/>
         <source>Hello!</source>
         <translation>Merhaba!</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="178"/>
+        <location filename="../qml/Main.qml" line="187"/>
         <source>arnotch is working</source>
         <translation>arnotch çalışıyor</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="182"/>
+        <location filename="../qml/Main.qml" line="191"/>
         <source>Quit</source>
         <translation>Çık</translation>
     </message>

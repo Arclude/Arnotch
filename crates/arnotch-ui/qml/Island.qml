@@ -45,7 +45,24 @@ Window {
     property string tab: "activity"
     // Files are being dragged over the island: it shows drop targets instead of a tab.
     property bool dragging: false
-    readonly property string shownTab: dragging ? "drop" : opened ? tab : "activity"
+    // Files waiting for the user to pick where they go (a screenshot): file:// urls
+    property var pendingUrls: []
+    readonly property bool choosing: pendingUrls.length > 0
+    // The drop targets are shown: files dragged over the island, or waiting for a pick
+    readonly property bool targetsShown: dragging || choosing
+    readonly property string shownTab: targetsShown ? "drop" : opened ? tab : "activity"
+
+    // Shows the targets for files to click one of; gives up after 20 seconds.
+    function choose(urls) {
+        pendingUrls = urls
+        chooseTimeout.restart()
+    }
+
+    Timer {
+        id: chooseTimeout
+        interval: 20000
+        onTriggered: root.pendingUrls = []
+    }
     readonly property bool sharingOn: settings.shareService !== "off"
 
     signal settingsRequested()
@@ -54,7 +71,7 @@ Window {
     // Show the detailed activity card instead of the headline.
     readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying
                                      && (notch.focus.steps.length > 0 || !!notch.focus.permission)
-    readonly property int expandedWidth: dragging ? 620
+    readonly property int expandedWidth: targetsShown ? 620
                                        : shownTab === "terminals" || shownTab === "shelf" ? 540
                                        : showCard || shownTab === "chat" ? 640 : 470
     readonly property int maxExpandedWidth: 640
@@ -87,7 +104,7 @@ Window {
     readonly property bool expanded: opened
                                      || (notch.alerting && settings.autoExpand)
                                      || (notch.showingActivity && settings.liveActivity)
-                                     || dragging || notch.uploading
+                                     || targetsShown || notch.uploading
 
     readonly property color moodColor: notch.mood === "waiting" ? "#ffb020"
                                      : notch.mood === "working" ? "#4c8dff"
@@ -126,6 +143,7 @@ Window {
 
     function dropped(action) {
         dragging = false
+        pendingUrls = []
         dragLeave.stop()
         action()
     }
@@ -249,7 +267,10 @@ Window {
 
         TapHandler {
             onTapped: {
-                if (root.expanded) {
+                if (root.choosing) {
+                    // A click beside the targets cancels the pick.
+                    root.pendingUrls = []
+                } else if (root.expanded) {
                     root.opened = false
                     root.notch.dismiss()
                 } else {
@@ -385,7 +406,7 @@ Window {
 
             // Tabs, only when the user opened the island
             Row {
-                visible: root.opened && !root.dragging
+                visible: root.opened && !root.targetsShown
                 spacing: 6
 
                 Repeater {
@@ -429,7 +450,7 @@ Window {
 
             // Files being shared, as in "Uploading report.pdf  54%"
             Repeater {
-                model: root.dragging ? [] : root.notch.uploads
+                model: root.targetsShown ? [] : root.notch.uploads
 
                 Column {
                     required property var modelData
@@ -477,10 +498,22 @@ Window {
                 }
             }
 
+            Text {
+                visible: root.choosing
+                width: parent.width
+                elide: Text.ElideMiddle
+                text: qsTr("Where should %1 go?").arg(root.choosing ? decodeURIComponent(root.pendingUrls[0].split("/").pop()) : "")
+                color: "#f2f3f5"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+
             DropTargets {
                 id: dropTargets
                 width: parent.width
-                visible: root.dragging
+                visible: root.targetsShown
+                clickable: root.choosing
+                onTileClicked: index => dropOn(index, root.pendingUrls)
                 claudeTerminals: root.notch.claudeTerminals
                 sharingOn: root.sharingOn
                 onShelve: urls => root.dropped(() => root.shelve(urls))

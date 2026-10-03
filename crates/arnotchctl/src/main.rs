@@ -6,6 +6,7 @@
 //!   arnotchctl close                   close the island
 //!   arnotchctl shelf <file>...         put files on the shelf
 //!   arnotchctl share <file>            upload a file and copy its link
+//!   arnotchctl screenshot              select a region (Spectacle), then pick where it goes
 //!   arnotchctl answer <decision>       answer Claude's latest permission request
 //!                                    (allow, deny, ask)
 //!   arnotchctl settings                open the settings window
@@ -28,6 +29,7 @@ const USAGE: &str = "usage:
   arnotchctl close
   arnotchctl shelf <file>...
   arnotchctl share <file>
+  arnotchctl screenshot
   arnotchctl answer allow|deny|ask
   arnotchctl settings
   arnotchctl terminals
@@ -72,6 +74,7 @@ fn main() -> ExitCode {
             Err(code) => code,
         },
         ["settings"] => send(&Event::OpenSettings),
+        ["screenshot"] => screenshot(),
         ["terminals"] => {
             let (terminals, _) = arnotch_core::terminals::Scanner::new().scan();
             println!(
@@ -150,6 +153,55 @@ fn claude_hook() -> ExitCode {
         _ = ipc::send(&event);
     }
     ExitCode::SUCCESS
+}
+
+/// Lets the user select a region of the screen with Spectacle, then asks the island
+/// where the picture goes (a Claude session, the chat, the shelf, a share link).
+/// Pictures are kept in ~/.cache/arnotch/screenshots, the newest 20.
+fn screenshot() -> ExitCode {
+    let cache = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".cache")
+        });
+    let dir = cache.join("arnotch/screenshots");
+    if let Err(err) = std::fs::create_dir_all(&dir) {
+        eprintln!("arnotchctl: cannot create {}: {err}", dir.display());
+        return ExitCode::FAILURE;
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    let path = dir.join(format!("screenshot-{stamp}.png"));
+
+    let status = std::process::Command::new("spectacle")
+        .args(["--background", "--nonotify", "--region", "--output"])
+        .arg(&path)
+        .status();
+    if let Err(err) = status {
+        eprintln!("arnotchctl: cannot run spectacle (KDE's screenshot tool): {err}");
+        return ExitCode::FAILURE;
+    }
+    // No file: the selection was cancelled.
+    if !path.is_file() {
+        return ExitCode::SUCCESS;
+    }
+
+    let mut old: Vec<_> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "png"))
+        .collect();
+    old.sort();
+    for stale in old.iter().rev().skip(20) {
+        _ = std::fs::remove_file(stale);
+    }
+    send(&Event::Pick {
+        paths: vec![path.to_string_lossy().into_owned()],
+    })
 }
 
 /// Claude Code's status line command: passes the session's cost and the account's rate

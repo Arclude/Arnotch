@@ -40,6 +40,9 @@ pub enum Event {
     Close,
     /// Put files (absolute paths) on the shelf.
     Shelve { paths: Vec<String> },
+    /// Show files (absolute paths) with the drop targets to pick where they go, e.g. a
+    /// screenshot just taken.
+    Pick { paths: Vec<String> },
     /// Share a file (absolute path) with the service chosen in the settings.
     Share { path: String },
     /// Answer the most recent pending permission request, e.g.

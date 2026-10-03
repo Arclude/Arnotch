@@ -90,6 +90,8 @@ QtObject {
                 app.closeIslands()
             else if (ev.type === "shelve")
                 app.state.addToShelf(ev.paths)
+            else if (ev.type === "pick")
+                app.pick(ev.paths)
             else if (ev.type === "share")
                 app.bridge.shareFile(ev.path, app.settings.shareService, app.settings.shareCommand)
             else
@@ -133,6 +135,13 @@ QtObject {
         }
     }
 
+    // Shows the drop targets on the islands for the files to be sent somewhere.
+    function pick(paths) {
+        const urls = paths.map(path => "file://" + encodeURI(path))
+        for (let i = 0; i < islands.count; i++)
+            islands.objectAt(i).choose(urls)
+    }
+
     function toggleIslands(tab) {
         for (let i = 0; i < islands.count; i++) {
             const island = islands.objectAt(i)
@@ -145,8 +154,10 @@ QtObject {
     }
 
     function closeIslands() {
-        for (let i = 0; i < islands.count; i++)
+        for (let i = 0; i < islands.count; i++) {
             islands.objectAt(i).opened = false
+            islands.objectAt(i).pendingUrls = []
+        }
         state.dismiss()
     }
 

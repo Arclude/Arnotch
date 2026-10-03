@@ -15,6 +15,8 @@ apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 kglobalaccel() { method=$1; shift; dbus-send --session --print-reply --dest=org.kde.kglobalaccel /kglobalaccel "org.kde.KGlobalAccel.$method" "$@"; }
 shortcut_id='array:string:arnotch-chat.desktop,_launch,arnotch: Chat,arnotch: Chat'
 meta_space=268435488
+shot_id='array:string:arnotch-screenshot.desktop,_launch,arnotch: Screenshot,arnotch: Screenshot'
+meta_shift_c=301989955
 
 # Claude Code's status line goes through arnotchctl, which passes the session's cost and the
 # plan's rate limits to arnotch and then runs the status line the user had (saved aside).
@@ -55,7 +57,9 @@ case "${1:-}" in
     --hooks) hooks=true ;;
     --uninstall)
         systemctl --user disable --now arnotch.service 2>/dev/null || true
-        rm -f "$units/arnotch.service" "$bin/arnotch" "$bin/arnotchctl" "$apps/arnotch-chat.desktop"
+        rm -f "$units/arnotch.service" "$bin/arnotch" "$bin/arnotchctl" "$apps/arnotch-chat.desktop" \
+            "$apps/arnotch-screenshot.desktop"
+        kglobalaccel unregister string:arnotch-screenshot.desktop string:_launch >/dev/null 2>&1 || true
         kglobalaccel unregister string:arnotch-chat.desktop string:_launch >/dev/null 2>&1 || true
         statusline restore
         systemctl --user daemon-reload
@@ -177,6 +181,29 @@ DESKTOP
         echo "Chat shortcut: Meta+Space"
     else
         echo "Chat shortcut: Meta+Space is taken; pick one in System Settings › Shortcuts (arnotch: Chat)"
+    fi
+
+    # Meta+Shift+C: select a region of the screen and pick where the picture goes.
+    cat >"$apps/arnotch-screenshot.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=arnotch: Screenshot
+Name[tr]=arnotch: Ekran görüntüsü
+Exec=$bin/arnotchctl screenshot
+Icon=spectacle
+NoDisplay=true
+StartupNotify=false
+X-KDE-GlobalAccel-CommandShortcut=true
+DESKTOP
+    kbuildsycoca6 >/dev/null 2>&1 || true
+    kglobalaccel doRegister "$shot_id" >/dev/null
+    if kglobalaccel shortcut "$shot_id" | grep -q int32; then
+        echo "Screenshot shortcut: kept as set in System Settings"
+    elif kglobalaccel isGlobalShortcutAvailable int32:$meta_shift_c string:arnotch-screenshot.desktop | grep -q true; then
+        kglobalaccel setShortcut "$shot_id" array:int32:$meta_shift_c uint32:6 >/dev/null
+        echo "Screenshot shortcut: Meta+Shift+C"
+    else
+        echo "Screenshot shortcut: Meta+Shift+C is taken; pick one in System Settings › Shortcuts (arnotch: Screenshot)"
     fi
 fi
 

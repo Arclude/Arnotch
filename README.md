@@ -107,6 +107,11 @@ Drag files onto the island and drop them on one of its targets:
 
 `arnotchctl shelf <file>...` and `arnotchctl share <file>` do the same from a terminal.
 
+**Meta+Shift+C** (set by `contrib/install.sh` on KDE, or bind `arnotchctl screenshot`) lets you
+select a region of the screen with Spectacle; the island then asks where the picture goes, with
+the same targets as a drop: a Claude session, the chat, the shelf or a share link. Pictures are
+kept in `~/.cache/arnotch/screenshots` (the newest 20).
+
 Below the files, the *Shelf* tab lists the last eight texts you copied (KDE's clipboard history,
 Klipper); a click copies one again. Entries that look like a private key or an access token are
 hidden on screen but can still be copied.

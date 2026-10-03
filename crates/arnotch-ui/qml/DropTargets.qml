@@ -14,6 +14,9 @@ Row {
     // it from the pointer position: nested DropAreas let the first one that grabbed
     // the drag keep it, so the highlight lagged behind the pointer.
     property int hoveredTile: -1
+    // The tiles can be clicked (files waiting for a pick) instead of dropped on
+    property bool clickable: false
+    signal tileClicked(int index)
 
     signal shelve(var urls)
     signal sendToClaude(string terminalId, var urls)
@@ -74,6 +77,16 @@ Row {
 
             width: (targets.width - targets.spacing * (targets.tiles.length - 1)) / targets.tiles.length
             height: 86
+
+            MouseArea {
+                anchors.fill: parent
+                z: 1
+                enabled: targets.clickable
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onContainsMouseChanged: targets.hoveredTile = containsMouse ? tile.index : (targets.hoveredTile === tile.index ? -1 : targets.hoveredTile)
+                onClicked: targets.tileClicked(tile.index)
+            }
 
             Rectangle {
                 anchors.fill: parent
