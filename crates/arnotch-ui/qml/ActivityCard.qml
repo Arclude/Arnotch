@@ -9,6 +9,8 @@ Item {
     required property var session
     required property string mood
     required property color moodColor
+    // NotchState.usage of this session: { model, cost_usd, context_percent }, or null
+    property var usage: null
 
     // A pending permission request takes over the panel until it is answered.
     readonly property var permission: session.permission ?? null
@@ -71,6 +73,18 @@ Item {
                     : card.session.prompt || "Claude Code"
                 color: card.session.phase === "waiting" ? "#ffb020" : "#8b909a"
                 font.pixelSize: 11
+            }
+            // Cost and context use, from the status line
+            Text {
+                width: parent.width
+                visible: card.usage !== null
+                elide: Text.ElideRight
+                text: card.usage ? ["$" + card.usage.cost_usd.toFixed(2),
+                                    card.usage.context_percent !== null ? qsTr("context %1%").arg(Math.round(card.usage.context_percent)) : ""]
+                                   .filter(Boolean).join("  ·  ") : ""
+                color: card.usage && card.usage.context_percent >= 80 ? "#ffb020" : "#6b707a"
+                font.pixelSize: 10
+                font.features: { "tnum": 1 }
             }
         }
 

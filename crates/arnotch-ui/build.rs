@@ -27,6 +27,7 @@ fn main() {
         "qml/LevelIndicator.qml",
         "qml/MeetingRow.qml",
         "qml/PromptPanel.qml",
+        "qml/LimitsRow.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

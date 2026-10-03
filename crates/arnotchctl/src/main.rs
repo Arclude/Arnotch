@@ -11,6 +11,8 @@
 //!   arnotchctl settings                open the settings window
 //!   arnotchctl terminals               list open terminals and what runs in them
 //!   arnotchctl claude-hook             forward a Claude Code hook payload read from stdin
+//!   arnotchctl statusline              Claude Code status line: forwards usage, then runs
+//!                                     the previous status line command
 //!   arnotchctl send '<json event>'     send a raw event
 
 use std::io::Read;
@@ -79,6 +81,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["claude-hook"] => claude_hook(),
+        ["statusline"] => statusline(),
         ["send", json] => match serde_json::from_str(json) {
             Ok(event) => send(&event),
             Err(err) => {
@@ -147,6 +150,47 @@ fn claude_hook() -> ExitCode {
         _ = ipc::send(&event);
     }
     ExitCode::SUCCESS
+}
+
+/// Claude Code's status line command: passes the session's cost and the account's rate
+/// limits to arnotch, then runs the status line the user had before (saved by
+/// install.sh in ~/.config/arnotch/statusline-command) with the same input.
+fn statusline() -> ExitCode {
+    let mut input = Vec::new();
+    if std::io::stdin().read_to_end(&mut input).is_err() {
+        return ExitCode::SUCCESS;
+    }
+    if let Some(usage) = claude::usage_from_statusline(&String::from_utf8_lossy(&input)) {
+        _ = ipc::send(&Event::Usage(usage));
+    }
+
+    let config = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config")
+        });
+    let Ok(command) = std::fs::read_to_string(config.join("arnotch/statusline-command")) else {
+        return ExitCode::SUCCESS;
+    };
+    let command = command.trim();
+    if command.is_empty() {
+        return ExitCode::SUCCESS;
+    }
+    let child = std::process::Command::new("sh")
+        .args(["-c", command])
+        .stdin(std::process::Stdio::piped())
+        .spawn();
+    let Ok(mut child) = child else {
+        return ExitCode::FAILURE;
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        _ = stdin.write_all(&input);
+    }
+    match child.wait() {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
+    }
 }
 
 /// How long a plan approval or a question waits in the island, which takes reading:

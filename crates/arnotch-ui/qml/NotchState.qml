@@ -48,6 +48,15 @@ QtObject {
     // Main binds this to the setting.
     property bool indicators: true
 
+    // The Claude plan's rate limits, from the latest status line: { five_hour, seven_day },
+    // each { used_percent, resets_at } or absent (API key users have none).
+    property var limits: null
+    // Per session: { model, cost_usd, context_percent }
+    property var usage: ({})
+    property int usageRevision: 0
+    // Limit warnings already given, by window reset time and threshold
+    property var limitWarned: ({})
+
     // Meetings in the next 24 hours: [{ title, start, end, link }] (Unix seconds)
     property var meetings: []
     // Milliseconds since the epoch, updated once a minute with the clock
@@ -139,6 +148,8 @@ QtObject {
                 showLevel(ev.kind, ev.value, ev.muted)
         } else if (ev.type === "battery") {
             handleBattery(ev.battery)
+        } else if (ev.type === "usage") {
+            handleUsage(ev)
         } else if (ev.type === "calendar") {
             meetings = ev.meetings
             remindMeetings()
@@ -321,6 +332,29 @@ QtObject {
         chat.revision++
         if (ev.state === "done" || ev.state === "failed")
             chatFinished(ev.state, chat.get(last).body)
+    }
+
+    function handleUsage(ev) {
+        usage[ev.session_id] = { model: ev.model, cost_usd: ev.cost_usd, context_percent: ev.context_percent ?? null }
+        usageRevision++
+        if (!ev.five_hour && !ev.seven_day)
+            return
+        limits = { five_hour: ev.five_hour ?? null, seven_day: ev.seven_day ?? null }
+        // Crossing 80% and 95% of the 5-hour window opens the island once per window.
+        const w = ev.five_hour
+        if (!w)
+            return
+        for (const threshold of [95, 80]) {
+            const key = w.resets_at + ":" + threshold
+            if (w.used_percent >= threshold && !limitWarned[key]) {
+                limitWarned[w.resets_at + ":80"] = true
+                limitWarned[key] = true
+                say(qsTr("%1% of your 5-hour Claude limit used").arg(Math.round(w.used_percent)),
+                    qsTr("Resets at %1").arg(Qt.formatTime(new Date(w.resets_at * 1000), "HH:mm")), 10000)
+                notifying = true
+                break
+            }
+        }
     }
 
     // Ten minutes before a meeting, and when it starts, the island opens to say so.

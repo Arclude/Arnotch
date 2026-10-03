@@ -111,6 +111,15 @@ Below the files, the *Shelf* tab lists the last eight texts you copied (KDE's cl
 Klipper); a click copies one again. Entries that look like a private key or an access token are
 hidden on screen but can still be copied.
 
+## Claude usage
+
+The *Activity* tab shows how much of your Claude plan's 5-hour and 7-day limits is used and when
+each resets, and a session's card shows its cost and how full its context is. The island opens
+when the 5-hour window passes 80% and 95%. The numbers come from Claude Code's status line input:
+`contrib/install.sh` points the status line at `arnotchctl statusline`, which passes them on and
+then runs the status line you had before (saved in `~/.config/arnotch/statusline-command`), so it
+looks the same. `--uninstall` puts it back. Limits are shown for Pro and Max plans.
+
 ## Chat
 
 The *Chat* tab talks to Claude without opening a terminal. Each message runs the Claude Code

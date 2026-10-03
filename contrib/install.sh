@@ -16,6 +16,40 @@ kglobalaccel() { method=$1; shift; dbus-send --session --print-reply --dest=org.
 shortcut_id='array:string:arnotch-chat.desktop,_launch,arnotch: Chat,arnotch: Chat'
 meta_space=268435488
 
+# Claude Code's status line goes through arnotchctl, which passes the session's cost and the
+# plan's rate limits to arnotch and then runs the status line the user had (saved aside).
+statusline() {
+    [ -f "$claude_settings" ] || return 0
+    python3 - "$1" "$claude_settings" "$bin/arnotchctl" "${XDG_CONFIG_HOME:-$HOME/.config}/arnotch/statusline-command" <<'EOF'
+import json, os, shutil, sys, time
+
+action, settings_file, arnotchctl, saved = sys.argv[1:]
+with open(settings_file) as f:
+    settings = json.load(f)
+line = settings.get("statusLine") or {}
+ours = "arnotchctl" in line.get("command", "") and "statusline" in line.get("command", "")
+if action == "install" and not ours:
+    os.makedirs(os.path.dirname(saved), exist_ok=True)
+    with open(saved, "w") as f:
+        f.write(line.get("command", "") if line.get("type", "command") == "command" else "")
+    settings["statusLine"] = {**line, "type": "command", "command": f"'{arnotchctl}' statusline"}
+    print("Claude Code status line: now passes usage and limits to arnotch (your previous one still shows)")
+elif action == "restore" and ours:
+    previous = open(saved).read().strip() if os.path.exists(saved) else ""
+    if previous:
+        settings["statusLine"] = {**line, "command": previous}
+    else:
+        settings.pop("statusLine", None)
+    print("Claude Code status line: restored")
+else:
+    sys.exit(0)
+shutil.copy2(settings_file, f"{settings_file}.bak.{time.strftime('%Y%m%d-%H%M%S')}")
+with open(settings_file, "w") as f:
+    json.dump(settings, f, indent=2)
+    f.write("\n")
+EOF
+}
+
 hooks=false
 case "${1:-}" in
     --hooks) hooks=true ;;
@@ -23,6 +57,7 @@ case "${1:-}" in
         systemctl --user disable --now arnotch.service 2>/dev/null || true
         rm -f "$units/arnotch.service" "$bin/arnotch" "$bin/arnotchctl" "$apps/arnotch-chat.desktop"
         kglobalaccel unregister string:arnotch-chat.desktop string:_launch >/dev/null 2>&1 || true
+        statusline restore
         systemctl --user daemon-reload
         echo "arnotch removed. The Claude Code hooks in $claude_settings are left as they are."
         exit 0
@@ -87,6 +122,8 @@ if hooks:
     print("Claude Code permission hook: timeout raised to 600 s for plans and questions")
 EOF
 fi
+statusline install
+
 if [ -e "$units/notch.service" ] || [ -e "$bin/notch" ]; then
     systemctl --user disable --now notch.service 2>/dev/null || true
     rm -f "$units/notch.service" "$bin/notch" "$bin/notchctl"

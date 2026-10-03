@@ -4,72 +4,77 @@
 <context>
     <name>ActivityCard</name>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="165"/>
+        <location filename="../qml/ActivityCard.qml" line="83"/>
+        <source>context %1%</source>
+        <translation>bağlam %%1</translation>
+    </message>
+    <message>
+        <location filename="../qml/ActivityCard.qml" line="179"/>
         <source>Approve the plan?</source>
         <translation>Plan onaylansın mı?</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="165"/>
+        <location filename="../qml/ActivityCard.qml" line="179"/>
         <source>Claude asks</source>
         <translation>Claude soruyor</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="166"/>
+        <location filename="../qml/ActivityCard.qml" line="180"/>
         <source>Allow %1?</source>
         <translation>%1 çalıştırılsın mı?</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="179"/>
+        <location filename="../qml/ActivityCard.qml" line="193"/>
         <source>✓ done</source>
         <translation>✓ bitti</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="180"/>
+        <location filename="../qml/ActivityCard.qml" line="194"/>
         <source>✗ failed</source>
         <translation>✗ başarısız</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="181"/>
+        <location filename="../qml/ActivityCard.qml" line="195"/>
         <source>running…</source>
         <translation>çalışıyor…</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="269"/>
+        <location filename="../qml/ActivityCard.qml" line="283"/>
         <source>waiting for output…</source>
         <translation>çıktı bekleniyor…</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="269"/>
+        <location filename="../qml/ActivityCard.qml" line="283"/>
         <source>(no output)</source>
         <translation>(çıktı yok)</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="302"/>
+        <location filename="../qml/ActivityCard.qml" line="316"/>
         <source>Allow</source>
         <translation>İzin ver</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="308"/>
+        <location filename="../qml/ActivityCard.qml" line="322"/>
         <source>Deny</source>
         <translation>Reddet</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="313"/>
+        <location filename="../qml/ActivityCard.qml" line="327"/>
         <source>Ask in terminal</source>
         <translation>Terminalde sor</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="335"/>
+        <location filename="../qml/ActivityCard.qml" line="349"/>
         <source>Send next prompt</source>
         <translation>Sonraki isteği gönder</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="335"/>
+        <location filename="../qml/ActivityCard.qml" line="349"/>
         <source>Reply to Claude</source>
         <translation>Claude&apos;a cevap ver</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="344"/>
+        <location filename="../qml/ActivityCard.qml" line="358"/>
         <source>Message to Claude…</source>
         <translation>Claude&apos;a mesaj…</translation>
     </message>
@@ -194,6 +199,24 @@
     </message>
 </context>
 <context>
+    <name>LimitsRow</name>
+    <message>
+        <location filename="../qml/LimitsRow.qml" line="27"/>
+        <source>5 h</source>
+        <translation>5 saat</translation>
+    </message>
+    <message>
+        <location filename="../qml/LimitsRow.qml" line="28"/>
+        <source>7 days</source>
+        <translation>7 gün</translation>
+    </message>
+    <message>
+        <location filename="../qml/LimitsRow.qml" line="53"/>
+        <source>%1% · resets %2</source>
+        <translation>%%1 · sıfırlanma %2</translation>
+    </message>
+</context>
+<context>
     <name>Main</name>
     <message>
         <location filename="../qml/Main.qml" line="60"/>
@@ -285,62 +308,72 @@
         <translation>Her şey sakin</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="206"/>
+        <location filename="../qml/NotchState.qml" line="217"/>
         <source>Finished</source>
         <translation>Bitti</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="208"/>
+        <location filename="../qml/NotchState.qml" line="219"/>
         <source>Needs your attention</source>
         <translation>Seni bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="212"/>
+        <location filename="../qml/NotchState.qml" line="223"/>
         <source>Plan ready for review</source>
         <translation>Plan onayını bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="212"/>
+        <location filename="../qml/NotchState.qml" line="223"/>
         <source>Claude has a question</source>
         <translation>Claude&apos;un bir sorusu var</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="213"/>
+        <location filename="../qml/NotchState.qml" line="224"/>
         <source>Wants to run %1</source>
         <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="217"/>
+        <location filename="../qml/NotchState.qml" line="228"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="286"/>
+        <location filename="../qml/NotchState.qml" line="297"/>
         <source>Link copied</source>
         <translation>Link kopyalandı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="288"/>
+        <location filename="../qml/NotchState.qml" line="299"/>
         <source>Couldn&apos;t share %1</source>
         <translation>%1 paylaşılamadı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="336"/>
+        <location filename="../qml/NotchState.qml" line="352"/>
+        <source>%1% of your 5-hour Claude limit used</source>
+        <translation>5 saatlik Claude limitinin %%1&apos;i doldu</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="353"/>
+        <source>Resets at %1</source>
+        <translation>Sıfırlanma: %1</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="370"/>
         <source>In %1 min: %2</source>
         <translation>%1 dk sonra: %2</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="338"/>
+        <location filename="../qml/NotchState.qml" line="372"/>
         <source>Starting now: %1</source>
         <translation>Şimdi başlıyor: %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="359"/>
+        <location filename="../qml/NotchState.qml" line="393"/>
         <source>Battery low</source>
         <translation>Pil azaldı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="359"/>
+        <location filename="../qml/NotchState.qml" line="393"/>
         <source>%1% left</source>
         <translation>%%1 kaldı</translation>
     </message>

@@ -540,6 +540,10 @@ Window {
                                                  view: "", diff: null, command: "", output: [], result: "" })
                 mood: root.notch.mood
                 moodColor: root.moodColor
+                usage: {
+                    root.notch.usageRevision // dependency
+                    return root.notch.focusId ? root.notch.usage[root.notch.focusId] ?? null : null
+                }
                 onAnswered: decision => {
                     const requestId = root.notch.focus.permission.request_id
                     root.bridge.answerPermission(requestId, decision)
@@ -582,6 +586,13 @@ Window {
                         font.pixelSize: 12
                     }
                 }
+            }
+
+            LimitsRow {
+                width: parent.width
+                visible: root.onActivity && root.opened && root.notch.limits !== null
+                windows: root.notch.limits
+                now: root.notch.now
             }
 
             MeetingRow {

@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::diff;
@@ -105,6 +105,74 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
         cwd: input.cwd,
         phase,
     }))
+}
+
+/// What Claude Code's status line input says about a session and the account's limits.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Usage {
+    pub session_id: String,
+    /// Short project name, as in agent events.
+    #[serde(default)]
+    pub project: String,
+    #[serde(default)]
+    pub model: String,
+    /// Estimated session cost in US dollars (list price).
+    #[serde(default)]
+    pub cost_usd: f64,
+    /// How full the context window is, 0 to 100.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_percent: Option<f64>,
+    /// Pro and Max plans only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub five_hour: Option<Window>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seven_day: Option<Window>,
+}
+
+/// A rate limit window.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Window {
+    /// 0 to 100.
+    pub used_percent: f64,
+    /// Unix seconds.
+    pub resets_at: i64,
+}
+
+/// Reads Claude Code's status line input (see its statusline documentation).
+pub fn usage_from_statusline(json: &str) -> Option<Usage> {
+    let input: Value = serde_json::from_str(json).ok()?;
+    let number = |path: &[&str]| -> Option<f64> {
+        path.iter()
+            .try_fold(&input, |value, key| value.get(key))?
+            .as_f64()
+    };
+    let window = |name: &str| -> Option<Window> {
+        Some(Window {
+            used_percent: number(&["rate_limits", name, "used_percentage"])?,
+            resets_at: number(&["rate_limits", name, "resets_at"])? as i64,
+        })
+    };
+    let cwd = input
+        .pointer("/workspace/project_dir")
+        .or_else(|| input.get("cwd"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    Some(Usage {
+        session_id: input.get("session_id")?.as_str()?.to_owned(),
+        project: Path::new(cwd)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        model: input
+            .pointer("/model/display_name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        cost_usd: number(&["cost", "total_cost_usd"]).unwrap_or(0.0),
+        context_percent: number(&["context_window", "used_percentage"]),
+        five_hour: window("five_hour"),
+        seven_day: window("seven_day"),
+    })
 }
 
 /// Whether the tool waits for the user's own input (a plan to approve, questions to
@@ -598,5 +666,33 @@ mod tests {
             let json = notification(&format!(r#","notification_type":"{ignored}""#));
             assert_eq!(event_from_hook(&json).unwrap(), None, "{ignored}");
         }
+    }
+
+    #[test]
+    fn reads_the_status_line_input() {
+        let json = r#"{"session_id":"s1","cwd":"/x/korus","workspace":{"project_dir":"/x/korus"},
+            "model":{"id":"claude-opus-5-5","display_name":"Opus 5.5"},
+            "cost":{"total_cost_usd":1.25},"context_window":{"used_percentage":34.5},
+            "rate_limits":{"five_hour":{"used_percentage":57,"resets_at":1791084000},
+                           "seven_day":{"used_percentage":43.5,"resets_at":1791414000}}}"#;
+        let usage = usage_from_statusline(json).unwrap();
+        assert_eq!(usage.project, "korus");
+        assert_eq!(usage.model, "Opus 5.5");
+        assert_eq!(usage.cost_usd, 1.25);
+        assert_eq!(usage.context_percent, Some(34.5));
+        assert_eq!(
+            usage.five_hour,
+            Some(Window {
+                used_percent: 57.0,
+                resets_at: 1791084000
+            })
+        );
+        assert_eq!(usage.seven_day.unwrap().used_percent, 43.5);
+
+        // API key users get no rate limits.
+        let usage =
+            usage_from_statusline(r#"{"session_id":"s2","cost":{"total_cost_usd":0.1}}"#).unwrap();
+        assert_eq!(usage.five_hour, None);
+        assert_eq!(usage_from_statusline("not json"), None);
     }
 }
