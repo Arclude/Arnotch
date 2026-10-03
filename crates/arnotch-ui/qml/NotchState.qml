@@ -48,6 +48,9 @@ QtObject {
     // Main binds this to the setting.
     property bool indicators: true
 
+    // Latest text entries of the clipboard history, newest first
+    property var clipboard: []
+
     // What's playing (see MediaCard), null when no player has a track.
     property var media: null
 
@@ -122,6 +125,8 @@ QtObject {
                 showLevel(ev.kind, ev.value, ev.muted)
         } else if (ev.type === "battery") {
             handleBattery(ev.battery)
+        } else if (ev.type === "clipboard") {
+            clipboard = ev.items
         } else if (ev.type === "media") {
             media = ev.player ?? null
         } else if (ev.type === "chat") {

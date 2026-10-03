@@ -447,6 +447,7 @@ Window {
                 width: parent.width
                 visible: root.shownTab === "shelf"
                 shelf: root.notch.shelf
+                clipboard: root.notch.clipboard
                 bridge: root.bridge
                 claudeTerminals: root.notch.claudeTerminals
                 sharingOn: root.sharingOn

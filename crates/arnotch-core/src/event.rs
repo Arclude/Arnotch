@@ -82,6 +82,10 @@ pub enum Event {
     /// The battery's state; published by the notch itself.
     #[serde(skip_deserializing)]
     Battery { battery: crate::system::Battery },
+    /// The latest text entries of the clipboard history, newest first; published by the
+    /// notch itself.
+    #[serde(skip_deserializing)]
+    Clipboard { items: Vec<crate::clipboard::Entry> },
     /// What's playing, `None` when no player has a track; published by the notch itself.
     #[serde(skip_deserializing)]
     Media {

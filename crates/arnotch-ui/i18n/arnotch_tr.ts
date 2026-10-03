@@ -242,42 +242,42 @@
         <translation>Her şey sakin</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="179"/>
+        <location filename="../qml/NotchState.qml" line="184"/>
         <source>Finished</source>
         <translation>Bitti</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="181"/>
+        <location filename="../qml/NotchState.qml" line="186"/>
         <source>Needs your attention</source>
         <translation>Seni bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="183"/>
+        <location filename="../qml/NotchState.qml" line="188"/>
         <source>Wants to run %1</source>
         <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="187"/>
+        <location filename="../qml/NotchState.qml" line="192"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="255"/>
+        <location filename="../qml/NotchState.qml" line="260"/>
         <source>Link copied</source>
         <translation>Link kopyalandı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="257"/>
+        <location filename="../qml/NotchState.qml" line="262"/>
         <source>Couldn&apos;t share %1</source>
         <translation>%1 paylaşılamadı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="311"/>
+        <location filename="../qml/NotchState.qml" line="316"/>
         <source>Battery low</source>
         <translation>Pil azaldı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="311"/>
+        <location filename="../qml/NotchState.qml" line="316"/>
         <source>%1% left</source>
         <translation>%%1 kaldı</translation>
     </message>
@@ -454,34 +454,49 @@
 <context>
     <name>ShelfView</name>
     <message>
-        <location filename="../qml/ShelfView.qml" line="42"/>
+        <location filename="../qml/ShelfView.qml" line="44"/>
         <source>Drop files on the island to keep them here</source>
         <translation>Burada saklamak için dosyaları island&apos;a bırak</translation>
     </message>
     <message>
-        <location filename="../qml/ShelfView.qml" line="115"/>
+        <location filename="../qml/ShelfView.qml" line="117"/>
         <source>Missing  ·  %1</source>
         <translation>Bulunamadı  ·  %1</translation>
     </message>
     <message>
-        <location filename="../qml/ShelfView.qml" line="131"/>
+        <location filename="../qml/ShelfView.qml" line="133"/>
         <source>Share link</source>
         <translation>Paylaşım linki</translation>
     </message>
     <message>
-        <location filename="../qml/ShelfView.qml" line="137"/>
+        <location filename="../qml/ShelfView.qml" line="139"/>
         <source>Send to Claude</source>
         <translation>Claude&apos;a gönder</translation>
     </message>
     <message>
-        <location filename="../qml/ShelfView.qml" line="144"/>
+        <location filename="../qml/ShelfView.qml" line="146"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
     <message>
-        <location filename="../qml/ShelfView.qml" line="149"/>
+        <location filename="../qml/ShelfView.qml" line="151"/>
         <source>Remove from shelf</source>
         <translation>Raftan kaldır</translation>
+    </message>
+    <message>
+        <location filename="../qml/ShelfView.qml" line="163"/>
+        <source>Clipboard</source>
+        <translation>Pano</translation>
+    </message>
+    <message>
+        <location filename="../qml/ShelfView.qml" line="191"/>
+        <source>🔒 Hidden: looks like a key or token</source>
+        <translation>🔒 Gizlendi: anahtar ya da token gibi görünüyor</translation>
+    </message>
+    <message>
+        <location filename="../qml/ShelfView.qml" line="203"/>
+        <source>Copied</source>
+        <translation>Kopyalandı</translation>
     </message>
 </context>
 <context>

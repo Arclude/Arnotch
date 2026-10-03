@@ -36,6 +36,14 @@ fn main() -> anyhow::Result<()> {
     spawn_system_watchers()?;
 
     std::thread::Builder::new()
+        .name("notch-clipboard".into())
+        .spawn(|| {
+            if let Err(err) = arnotch_core::clipboard::watch_history(bridge::publish_clipboard) {
+                tracing::info!("no clipboard history (Klipper): {err:#}");
+            }
+        })?;
+
+    std::thread::Builder::new()
         .name("notch-media".into())
         .spawn(|| {
             if let Err(err) = media::watch(bridge::publish_media) {

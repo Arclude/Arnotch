@@ -91,6 +91,11 @@ pub mod qobject {
         #[cxx_name = "mediaCommand"]
         fn media_command(self: &NotchBridge, bus_name: &QString, command: &QString);
 
+        /// Puts text back on the clipboard.
+        #[qinvokable]
+        #[cxx_name = "copyText"]
+        fn copy_text(self: &NotchBridge, text: &QString);
+
         /// Starts a new conversation; Claude forgets the previous one.
         #[qinvokable]
         #[cxx_name = "newChat"]
@@ -144,6 +149,14 @@ fn with_chat<T>(f: impl FnOnce(&mut Chat) -> T) -> T {
 
 /// What's playing, replayed to bridges created after it was published.
 static MEDIA: Mutex<Option<Event>> = Mutex::new(None);
+/// The clipboard history, likewise.
+static CLIPBOARD: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_clipboard(items: Vec<arnotch_core::clipboard::Entry>) {
+    let event = Event::Clipboard { items };
+    *CLIPBOARD.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
 
 pub fn publish_media(player: Option<media::Player>) {
     let event = Event::Media { player };
@@ -363,6 +376,15 @@ impl qobject::NotchBridge {
         });
     }
 
+    pub fn copy_text(&self, text: &QString) {
+        let text = text.to_string();
+        std::thread::spawn(move || {
+            if let Err(err) = clipboard::copy(&text) {
+                tracing::warn!("cannot copy: {err:#}");
+            }
+        });
+    }
+
     pub fn stop_chat(&self) {
         with_chat(|chat| {
             if let Some(pid) = chat.pid.take() {
@@ -418,6 +440,7 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
         let replay = [
             TERMINALS.lock().unwrap().clone(),
             MEDIA.lock().unwrap().clone(),
+            CLIPBOARD.lock().unwrap().clone(),
         ];
         for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));
