@@ -29,6 +29,10 @@ struct HookInput {
     error: Value,
     #[serde(default)]
     message: Option<String>,
+    /// For Notification: "permission_prompt", "idle_prompt", "auth_success",
+    /// "elicitation_dialog", ... (absent in older Claude Code versions).
+    #[serde(default)]
+    notification_type: Option<String>,
     #[serde(default)]
     prompt: Option<String>,
     #[serde(default)]
@@ -72,8 +76,14 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
             diff: file_diff(&tool, &input.tool_input),
             tool,
         },
-        "Notification" => AgentPhase::Waiting {
-            message: input.message.unwrap_or_default(),
+        // Only notifications that need an answer mean Claude waits for the user. The
+        // idle reminder ("Claude is waiting for your input") comes after a finished
+        // answer and must not turn a done session back into a waiting one.
+        "Notification" => match input.notification_type.as_deref() {
+            None | Some("permission_prompt" | "elicitation_dialog") => AgentPhase::Waiting {
+                message: input.message.unwrap_or_default(),
+            },
+            Some(_) => return Ok(None),
         },
         "Stop" => AgentPhase::Done,
         "SessionEnd" => AgentPhase::Ended,
@@ -430,5 +440,35 @@ mod tests {
             event.to_line(),
             "{\"type\":\"agent\",\"session_id\":\"abc\",\"project\":\"korus\",\"phase\":\"done\"}\n"
         );
+    }
+
+    #[test]
+    fn only_notifications_that_need_an_answer_mean_waiting() {
+        let notification = |kind: &str| {
+            format!(
+                r#"{{"session_id":"abc","cwd":"/x/korus","hook_event_name":"Notification","message":"m"{kind}}}"#
+            )
+        };
+        let waiting = |json: &str| {
+            matches!(
+                event_from_hook(json).unwrap(),
+                Some(Event::Agent {
+                    phase: AgentPhase::Waiting { .. },
+                    ..
+                })
+            )
+        };
+        assert!(waiting(&notification(
+            r#","notification_type":"permission_prompt""#
+        )));
+        assert!(waiting(&notification(
+            r#","notification_type":"elicitation_dialog""#
+        )));
+        // Older Claude Code versions send no type.
+        assert!(waiting(&notification("")));
+        for ignored in ["idle_prompt", "auth_success"] {
+            let json = notification(&format!(r#","notification_type":"{ignored}""#));
+            assert_eq!(event_from_hook(&json).unwrap(), None, "{ignored}");
+        }
     }
 }
