@@ -24,6 +24,7 @@ fn main() {
         "qml/ShelfView.qml",
         "qml/ChatView.qml",
         "qml/MediaCard.qml",
+        "qml/LevelIndicator.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

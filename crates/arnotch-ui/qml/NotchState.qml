@@ -39,6 +39,15 @@ QtObject {
                         .sort((a, b) => rank(a) - rank(b))
     }
 
+    // A level that just changed, shown in the closed island for a moment:
+    // { kind: "volume" | "brightness" | "battery", value: 0..1, muted }
+    property var level: null
+    readonly property bool showingLevel: levelTimer.running
+    // { percent, plugged }, null without a battery
+    property var battery: null
+    // Main binds this to the setting.
+    property bool indicators: true
+
     // What's playing (see MediaCard), null when no player has a track.
     property var media: null
 
@@ -108,6 +117,11 @@ QtObject {
             notifying = true
         } else if (ev.type === "upload") {
             handleUpload(ev)
+        } else if (ev.type === "level") {
+            if (indicators)
+                showLevel(ev.kind, ev.value, ev.muted)
+        } else if (ev.type === "battery") {
+            handleBattery(ev.battery)
         } else if (ev.type === "media") {
             media = ev.player ?? null
         } else if (ev.type === "chat") {
@@ -278,6 +292,30 @@ QtObject {
             chatFinished(ev.state, chat.get(last).body)
     }
 
+    function showLevel(kind, value, muted) {
+        level = { kind: kind, value: value, muted: muted }
+        levelTimer.restart()
+    }
+
+    // Plugging in shows the charge; a low battery opens the island.
+    function handleBattery(now) {
+        const before = battery
+        battery = now
+        if (!before || !indicators)
+            return
+        if (now.plugged && !before.plugged) {
+            showLevel("battery", now.percent / 100, false)
+        } else if (!now.plugged) {
+            for (const limit of [20, 10, 5]) {
+                if (now.percent <= limit && before.percent > limit) {
+                    say(qsTr("Battery low"), qsTr("%1% left").arg(Math.round(now.percent)), 8000)
+                    notifying = true
+                    break
+                }
+            }
+        }
+    }
+
     function addToShelf(paths) {
         shelf = shelf.concat(paths.filter(p => !shelf.includes(p)))
     }
@@ -324,6 +362,7 @@ QtObject {
         onTriggered: notch.notifying = false
     }
     property Timer activityTimer: Timer { interval: 3500 }
+    property Timer levelTimer: Timer { interval: 1600 }
 
     property Timer happyTimer: Timer {
         interval: 3000

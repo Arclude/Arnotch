@@ -5,6 +5,7 @@ use cxx_qt_lib::{QQmlApplicationEngine, QUrl};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use arnotch_core::system::{self, Level};
 use arnotch_core::terminals::{Finished, Scanner};
 use arnotch_core::{Event, i18n, ipc, media};
 use tracing_subscriber::EnvFilter;
@@ -31,6 +32,8 @@ fn main() -> anyhow::Result<()> {
     std::thread::Builder::new()
         .name("notch-terminals".into())
         .spawn(watch_terminals)?;
+
+    spawn_system_watchers()?;
 
     std::thread::Builder::new()
         .name("notch-media".into())
@@ -80,6 +83,51 @@ fn watch_terminals() {
             }
         }
     }
+}
+
+/// Volume, brightness and battery, each on its own thread blocked on its events.
+fn spawn_system_watchers() -> std::io::Result<()> {
+    let events = bridge::event_bus();
+    let send = move |event| _ = events.send(event);
+
+    let level = send.clone();
+    std::thread::Builder::new()
+        .name("notch-volume".into())
+        .spawn(move || {
+            let result = system::watch_volume(|value, muted| {
+                level(Event::Level {
+                    kind: Level::Volume,
+                    value,
+                    muted,
+                })
+            });
+            if let Err(err) = result {
+                tracing::info!("no volume indicator: {err:#}");
+            }
+        })?;
+    let level = send.clone();
+    std::thread::Builder::new()
+        .name("notch-bright".into())
+        .spawn(move || {
+            let result = system::watch_brightness(|value| {
+                level(Event::Level {
+                    kind: Level::Brightness,
+                    value,
+                    muted: false,
+                })
+            });
+            if let Err(err) = result {
+                tracing::info!("no brightness indicator: {err:#}");
+            }
+        })?;
+    std::thread::Builder::new()
+        .name("notch-battery".into())
+        .spawn(move || {
+            if let Err(err) = system::watch_battery(|battery| send(Event::Battery { battery })) {
+                tracing::info!("no battery indicator: {err:#}");
+            }
+        })?;
+    Ok(())
 }
 
 fn finished_notification(done: &Finished) -> Event {

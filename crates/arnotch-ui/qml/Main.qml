@@ -27,9 +27,12 @@ QtObject {
         property string shelf: "[]"
         // Briefly open the island to show diffs and command output
         property bool liveActivity: true
+        // Show volume, brightness and battery changes in the island
+        property bool indicators: true
     }
 
     property NotchState state: NotchState {
+        indicators: app.settings.indicators
         // The shelf survives restarts.
         Component.onCompleted: {
             try {

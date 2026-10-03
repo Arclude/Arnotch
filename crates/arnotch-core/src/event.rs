@@ -71,6 +71,17 @@ pub enum Event {
         #[serde(skip_serializing_if = "String::is_empty")]
         text: String,
     },
+    /// Volume or brightness changed (0.0 to 1.0); published by the notch itself.
+    #[serde(skip_deserializing)]
+    Level {
+        kind: crate::system::Level,
+        value: f32,
+        #[serde(default)]
+        muted: bool,
+    },
+    /// The battery's state; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Battery { battery: crate::system::Battery },
     /// What's playing, `None` when no player has a track; published by the notch itself.
     #[serde(skip_deserializing)]
     Media {

@@ -120,6 +120,14 @@ shortcut named *arnotch: Chat*, which you can change in System Settings › Shor
 bind `arnotchctl toggle chat` to a key. An answer that finishes while the chat is closed shows up
 as a short note in the island.
 
+## Indicators
+
+Changing the volume or a screen's brightness widens the closed island for a moment with a
+level bar, and plugging in the charger shows the battery's charge. A battery that drops below
+20%, 10% and 5% opens the island with a warning. Volume comes from `pactl` (PulseAudio or
+PipeWire), brightness from KDE's screen brightness service and the battery from UPower; all
+three are event driven. Turn them off in the settings (*Indicators*).
+
 ## Media
 
 The *Activity* tab shows what's playing, with its cover and previous, play/pause and next

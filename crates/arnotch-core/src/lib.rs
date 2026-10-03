@@ -12,6 +12,7 @@ pub mod i18n;
 pub mod ipc;
 pub mod media;
 pub mod share;
+pub mod system;
 pub mod terminals;
 
 pub use event::{AgentPhase, Decision, Event};

@@ -35,6 +35,8 @@ Window {
     readonly property rect inputRect: Qt.rect(island.x, island.y, island.width, island.height)
 
     readonly property int collapsedWidth: 190
+    // Volume, brightness or charge just changed: the closed island widens to show it.
+    readonly property bool levelShown: notch.showingLevel && !expanded
     // Matches the top panel by default, so the closed island never covers windows.
     readonly property int collapsedHeight: settings.height
     // The tab picked by the user; an island opened by an event always shows activity.
@@ -215,7 +217,7 @@ Window {
 
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
-        width: root.expanded ? root.expandedWidth : root.collapsedWidth
+        width: root.expanded ? root.expandedWidth : root.levelShown ? 310 : root.collapsedWidth
         height: root.expanded ? root.expandedHeight : root.collapsedHeight
         topLeftRadius: 0
         topRightRadius: 0
@@ -269,9 +271,18 @@ Window {
                 mood: root.notch.mood
             }
 
+            LevelIndicator {
+                anchors.centerIn: parent
+                anchors.horizontalCenterOffset: 10
+                visible: root.levelShown
+                kind: root.notch.level ? root.notch.level.kind : "volume"
+                value: root.notch.level ? root.notch.level.value : 0
+                muted: root.notch.level ? root.notch.level.muted : false
+            }
+
             Text {
                 anchors.centerIn: parent
-                visible: root.settings.showClock
+                visible: root.settings.showClock && !root.levelShown
                 text: root.notch.time
                 color: "#f2f3f5"
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
@@ -284,7 +295,8 @@ Window {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                visible: root.notch.sessions.count === 0 && root.notch.media !== null && root.notch.media.playing
+                visible: !root.levelShown && root.notch.sessions.count === 0 && root.notch.media !== null
+                         && root.notch.media.playing
                 size: Math.round(root.collapsedHeight * 0.62)
                 url: visible ? root.notch.media.art_url : ""
             }
@@ -294,7 +306,7 @@ Window {
                 anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
-                visible: root.notch.sessions.count > 0
+                visible: !root.levelShown && root.notch.sessions.count > 0
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter

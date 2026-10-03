@@ -148,27 +148,27 @@
 <context>
     <name>Island</name>
     <message>
-        <location filename="../qml/Island.qml" line="334"/>
+        <location filename="../qml/Island.qml" line="348"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="335"/>
+        <location filename="../qml/Island.qml" line="349"/>
         <source>Chat</source>
         <translation>Sohbet</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="336"/>
+        <location filename="../qml/Island.qml" line="350"/>
         <source>Terminals</source>
         <translation>Terminaller</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="337"/>
+        <location filename="../qml/Island.qml" line="351"/>
         <source>Shelf</source>
         <translation>Raf</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="390"/>
+        <location filename="../qml/Island.qml" line="404"/>
         <source>Uploading %1</source>
         <translation>%1 yükleniyor</translation>
     </message>
@@ -176,37 +176,37 @@
 <context>
     <name>Main</name>
     <message>
-        <location filename="../qml/Main.qml" line="52"/>
+        <location filename="../qml/Main.qml" line="55"/>
         <source>Claude answered</source>
         <translation>Claude cevapladı</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="54"/>
+        <location filename="../qml/Main.qml" line="57"/>
         <source>Claude couldn&apos;t answer</source>
         <translation>Claude cevap veremedi</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="161"/>
+        <location filename="../qml/Main.qml" line="164"/>
         <source>Settings…</source>
         <translation>Ayarlar…</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="165"/>
+        <location filename="../qml/Main.qml" line="168"/>
         <source>Send a test notification</source>
         <translation>Deneme bildirimi gönder</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="166"/>
+        <location filename="../qml/Main.qml" line="169"/>
         <source>Hello!</source>
         <translation>Merhaba!</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="166"/>
+        <location filename="../qml/Main.qml" line="169"/>
         <source>arnotch is working</source>
         <translation>arnotch çalışıyor</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="170"/>
+        <location filename="../qml/Main.qml" line="173"/>
         <source>Quit</source>
         <translation>Çık</translation>
     </message>
@@ -242,34 +242,44 @@
         <translation>Her şey sakin</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="165"/>
+        <location filename="../qml/NotchState.qml" line="179"/>
         <source>Finished</source>
         <translation>Bitti</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="167"/>
+        <location filename="../qml/NotchState.qml" line="181"/>
         <source>Needs your attention</source>
         <translation>Seni bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="169"/>
+        <location filename="../qml/NotchState.qml" line="183"/>
         <source>Wants to run %1</source>
         <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="173"/>
+        <location filename="../qml/NotchState.qml" line="187"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="241"/>
+        <location filename="../qml/NotchState.qml" line="255"/>
         <source>Link copied</source>
         <translation>Link kopyalandı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="243"/>
+        <location filename="../qml/NotchState.qml" line="257"/>
         <source>Couldn&apos;t share %1</source>
         <translation>%1 paylaşılamadı</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="311"/>
+        <source>Battery low</source>
+        <translation>Pil azaldı</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="311"/>
+        <source>%1% left</source>
+        <translation>%%1 kaldı</translation>
     </message>
 </context>
 <context>
@@ -426,7 +436,17 @@
         <translation>Diff ve komut çıktılarını kısaca göster</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsWindow.qml" line="156"/>
+        <location filename="../qml/SettingsWindow.qml" line="149"/>
+        <source>Indicators</source>
+        <translation>Göstergeler</translation>
+    </message>
+    <message>
+        <location filename="../qml/SettingsWindow.qml" line="151"/>
+        <source>Show volume, brightness and battery changes</source>
+        <translation>Ses, parlaklık ve pil değişikliklerini göster</translation>
+    </message>
+    <message>
+        <location filename="../qml/SettingsWindow.qml" line="163"/>
         <source>Tip: with a centered clock in your top panel, use “Over the panel” and remove the panel&apos;s clock widget, the island shows the time instead.</source>
         <translation>İpucu: Üst panelinin ortasında saat varsa “Panelin üstünde”yi seçip panelin saat widget&apos;ını kaldırabilirsin; saati island gösterir.</translation>
     </message>

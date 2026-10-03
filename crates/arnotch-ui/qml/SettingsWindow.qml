@@ -145,6 +145,13 @@ ApplicationWindow {
                 checked: win.settings.liveActivity
                 onToggled: win.settings.liveActivity = checked
             }
+
+            Label { text: qsTr("Indicators") }
+            Switch {
+                text: qsTr("Show volume, brightness and battery changes")
+                checked: win.settings.indicators
+                onToggled: win.settings.indicators = checked
+            }
         }
 
         Item { Layout.fillHeight: true }
