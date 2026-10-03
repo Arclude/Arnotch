@@ -177,11 +177,11 @@ pub fn watch_battery(on_change: impl Fn(Battery)) -> zbus::Result<()> {
         message?;
         // UPower sends a few signals per update; read once they're all in.
         std::thread::sleep(Duration::from_millis(50));
-        if let Some(now) = read() {
-            if now != last {
-                on_change(now);
-                last = now;
-            }
+        if let Some(now) = read()
+            && now != last
+        {
+            on_change(now);
+            last = now;
         }
     }
     Ok(())
