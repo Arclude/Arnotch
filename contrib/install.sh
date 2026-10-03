@@ -46,16 +46,19 @@ if $hooks; then
     # Merges contrib/claude-code-hooks.json, with notchctl's full path since hooks
     # don't always see ~/.local/bin on PATH. Hooks that are already there are kept.
     python3 - "$root/contrib/claude-code-hooks.json" "$claude_settings" "$bin/notchctl" <<'EOF'
-import json, os, shutil, sys
+import json, os, shutil, sys, time
 
 hooks_file, settings_file, notchctl = sys.argv[1:]
 with open(hooks_file) as f:
     wanted = json.load(f)["hooks"]
 settings = {}
+backup = None
 if os.path.exists(settings_file):
     with open(settings_file) as f:
         settings = json.load(f)
-    shutil.copy2(settings_file, settings_file + ".bak")
+    # Timestamped, so an earlier backup is never overwritten.
+    backup = f"{settings_file}.bak.{time.strftime('%Y%m%d-%H%M%S')}"
+    shutil.copy2(settings_file, backup)
 
 added = 0
 current = settings.setdefault("hooks", {})
@@ -75,6 +78,6 @@ with open(settings_file, "w") as f:
     json.dump(settings, f, indent=2)
     f.write("\n")
 print(f"Claude Code hooks: added {added} event(s) to {settings_file}"
-      + (f" (backup: {settings_file}.bak)" if os.path.exists(settings_file + ".bak") else ""))
+      + (f" (backup: {backup})" if backup else ""))
 EOF
 fi
