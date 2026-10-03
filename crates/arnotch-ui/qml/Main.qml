@@ -29,6 +29,9 @@ QtObject {
         property bool liveActivity: true
         // Show volume, brightness and battery changes in the island
         property bool indicators: true
+        // Chat: let Claude search the web, and read files on this computer (read-only)
+        property bool chatWeb: true
+        property bool chatFiles: false
         // Show the playing song in the closed island (instead of the clock)
         property bool compactMedia: true
         // The calendar's iCalendar (ICS) address, a secret; empty for no calendar

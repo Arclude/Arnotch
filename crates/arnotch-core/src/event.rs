@@ -71,7 +71,8 @@ pub enum Event {
         /// The message being answered, so a stopped answer's last pieces can be told apart.
         turn: u32,
         state: ChatState,
-        /// The next piece of the answer (`streaming`), or what went wrong (`failed`).
+        /// The next piece of the answer (`streaming`), the tool in use (`tool`), or what
+        /// went wrong (`failed`).
         #[serde(skip_serializing_if = "String::is_empty")]
         text: String,
     },
@@ -239,6 +240,8 @@ pub enum UploadState {
 #[serde(rename_all = "snake_case")]
 pub enum ChatState {
     Streaming,
+    /// Claude uses a tool; the text is its name ("WebSearch", "Read", ...).
+    Tool,
     Done,
     Failed,
     Stopped,

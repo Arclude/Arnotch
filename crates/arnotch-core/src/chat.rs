@@ -3,7 +3,7 @@
 //! conversation continues with `--resume`.
 
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use anyhow::{Context, bail};
@@ -11,7 +11,32 @@ use serde::Deserialize;
 
 /// Keeps answers short enough for the island.
 const SYSTEM_PROMPT: &str = "You are answering in a small chat panel at the top of the user's \
-Linux desktop. Keep answers brief and to the point; use Markdown sparingly. You have no tools.";
+Linux desktop. Keep answers brief and to the point; use Markdown sparingly. You can't change \
+anything on the user's computer.";
+
+/// Images up to this size go to Claude as they are; larger ones only by path.
+const MAX_IMAGE: u64 = 5 * 1024 * 1024;
+/// Text files up to this size go with their contents.
+const MAX_TEXT: u64 = 200 * 1024;
+
+/// A message to Claude.
+#[derive(Debug, Default)]
+pub struct Request {
+    pub prompt: String,
+    /// Files attached to the message.
+    pub attachments: Vec<PathBuf>,
+    /// Let Claude search and read the web (WebSearch, WebFetch).
+    pub web: bool,
+    /// Let Claude read files on this computer (Read, Glob, Grep), read-only.
+    pub files: bool,
+}
+
+/// A piece of the answer as it streams in.
+pub enum Piece<'a> {
+    Text(&'a str),
+    /// Claude started using a tool ("WebSearch", "Read", ...).
+    Tool(&'a str),
+}
 
 /// A running answer. Read it with [`Answer::stream`]; [`Answer::pid`] lets another thread stop it.
 pub struct Answer {
@@ -20,7 +45,7 @@ pub struct Answer {
 
 /// Starts answering `prompt` in the conversation `session_id`: a new one, or one that
 /// already has messages when `resume` is set.
-pub fn ask(session_id: &str, resume: bool, prompt: &str) -> anyhow::Result<Answer> {
+pub fn ask(session_id: &str, resume: bool, request: &Request) -> anyhow::Result<Answer> {
     let dir = chat_dir();
     std::fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
 
@@ -29,20 +54,28 @@ pub fn ask(session_id: &str, resume: bool, prompt: &str) -> anyhow::Result<Answe
         .current_dir(&dir)
         .args([
             "-p",
+            "--input-format",
+            "stream-json",
             "--output-format",
             "stream-json",
             "--include-partial-messages",
             "--verbose",
         ])
-        // A plain chat: no tools, no MCP servers, and none of the user's settings, whose
-        // hooks would show this chat in the island as one more agent session.
-        .args([
-            "--tools",
-            "",
-            "--strict-mcp-config",
-            "--setting-sources",
-            "",
-        ])
+        // Only read-only tools the user turned on, allowed without asking; no MCP servers,
+        // and none of the user's settings, whose hooks would show this chat in the island
+        // as one more agent session.
+        .args(["--strict-mcp-config", "--setting-sources", ""]);
+    let mut tools = Vec::new();
+    if request.web {
+        tools.extend(["WebSearch", "WebFetch"]);
+    }
+    if request.files {
+        tools.extend(["Read", "Glob", "Grep"]);
+        command.args(["--add-dir", &home().to_string_lossy()]);
+    }
+    command
+        .args(["--tools", &tools.join(",")])
+        .args(["--allowedTools", &tools.join(",")])
         .args(["--append-system-prompt", SYSTEM_PROMPT])
         .args([if resume { "--resume" } else { "--session-id" }, session_id])
         .stdin(Stdio::piped())
@@ -52,11 +85,62 @@ pub fn ask(session_id: &str, resume: bool, prompt: &str) -> anyhow::Result<Answe
         .spawn()
         .context("cannot start claude (is Claude Code installed?)")?;
 
-    // The prompt goes through stdin, so it can be long or start with a dash.
+    // One user message, with the attachments as content blocks.
+    let message = serde_json::json!({
+        "type": "user",
+        "message": { "role": "user", "content": content(request) },
+    });
     let mut stdin = child.stdin.take().expect("stdin is piped");
-    stdin.write_all(prompt.as_bytes())?;
+    writeln!(stdin, "{message}")?;
     drop(stdin);
     Ok(Answer { child })
+}
+
+/// The message's content blocks: the prompt, then each attachment as an image, as text,
+/// or by path when it is neither (Claude can read it when file reading is on).
+fn content(request: &Request) -> Vec<serde_json::Value> {
+    use base64::Engine;
+
+    let mut blocks = vec![serde_json::json!({ "type": "text", "text": request.prompt })];
+    for path in &request.attachments {
+        let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(u64::MAX);
+        let name = path.display();
+        if let Some(media_type) = image_type(path)
+            && size <= MAX_IMAGE
+            && let Ok(bytes) = std::fs::read(path)
+        {
+            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+            blocks.push(
+                serde_json::json!({ "type": "text", "text": format!("Attached image: {name}") }),
+            );
+            blocks.push(serde_json::json!({
+                "type": "image",
+                "source": { "type": "base64", "media_type": media_type, "data": data },
+            }));
+        } else if let Some(text) = (size <= MAX_TEXT)
+            .then(|| std::fs::read_to_string(path).ok())
+            .flatten()
+        {
+            blocks.push(serde_json::json!({
+                "type": "text",
+                "text": format!("<file path=\"{name}\">\n{text}\n</file>"),
+            }));
+        } else {
+            blocks.push(serde_json::json!({ "type": "text", "text": format!("Attached file (not included): {name}") }));
+        }
+    }
+    blocks
+}
+
+fn image_type(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => return None,
+    })
 }
 
 impl Answer {
@@ -64,8 +148,8 @@ impl Answer {
         self.child.id()
     }
 
-    /// Calls `on_text` with each piece of the answer as it arrives, until it is complete.
-    pub fn stream(mut self, mut on_text: impl FnMut(&str)) -> anyhow::Result<()> {
+    /// Calls `on_piece` with each piece of the answer as it arrives, until it is complete.
+    pub fn stream(mut self, mut on_piece: impl FnMut(Piece)) -> anyhow::Result<()> {
         let stdout = BufReader::new(self.child.stdout.take().expect("stdout is piped"));
         let mut failure = None;
         let mut finished = false;
@@ -77,7 +161,13 @@ impl Answer {
                         StreamEvent::ContentBlockDelta {
                             delta: Delta::TextDelta { text },
                         },
-                }) => on_text(&text),
+                }) => on_piece(Piece::Text(&text)),
+                Ok(Message::StreamEvent {
+                    event:
+                        StreamEvent::ContentBlockStart {
+                            content_block: Block::ToolUse { name } | Block::ServerToolUse { name },
+                        },
+                }) => on_piece(Piece::Tool(&name)),
                 Ok(Message::Result { is_error, result }) => {
                     finished = true;
                     if is_error {
@@ -202,6 +292,23 @@ enum StreamEvent {
     ContentBlockDelta {
         delta: Delta,
     },
+    ContentBlockStart {
+        content_block: Block,
+    },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Block {
+    ToolUse {
+        name: String,
+    },
+    /// Tools the API runs itself, such as web search.
+    ServerToolUse {
+        name: String,
+    },
     #[serde(other)]
     Other,
 }
@@ -219,6 +326,54 @@ enum Delta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attachments_become_content_blocks() {
+        let dir = std::env::temp_dir().join(format!("arnotch-chat-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (png, txt, bin) = (
+            dir.join("shot.png"),
+            dir.join("notes.txt"),
+            dir.join("blob.bin"),
+        );
+        std::fs::write(&png, [0x89, b'P', b'N', b'G']).unwrap();
+        std::fs::write(&txt, "hello").unwrap();
+        std::fs::write(&bin, [0xff, 0xfe, 0x00]).unwrap();
+
+        let request = Request {
+            prompt: "What is this?".into(),
+            attachments: vec![png, txt, bin],
+            ..Default::default()
+        };
+        let blocks = content(&request);
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert_eq!(blocks[0]["text"], "What is this?");
+        assert_eq!(blocks[2]["type"], "image");
+        assert_eq!(blocks[2]["source"]["media_type"], "image/png");
+        assert_eq!(blocks[2]["source"]["data"], "iVBORw==");
+        assert!(
+            blocks[3]["text"]
+                .as_str()
+                .unwrap()
+                .ends_with("notes.txt\">\nhello\n</file>")
+        );
+        assert!(
+            blocks[4]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("Attached file (not included)")
+        );
+    }
+
+    #[test]
+    fn reads_tool_use_starts() {
+        let start = r#"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t","name":"WebSearch","input":{}}}}"#;
+        assert!(matches!(
+            serde_json::from_str::<Message>(start).unwrap(),
+            Message::StreamEvent { event: StreamEvent::ContentBlockStart { content_block: Block::ToolUse { name } } } if name == "WebSearch"
+        ));
+    }
 
     #[test]
     fn reads_text_deltas_and_results() {

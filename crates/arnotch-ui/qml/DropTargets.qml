@@ -18,13 +18,15 @@ Row {
     signal shelve(var urls)
     signal sendToClaude(string terminalId, var urls)
     signal share(var urls)
+    signal attachToChat(var urls)
 
     readonly property var tiles: {
         const list = [{ kind: "shelf", glyph: "▤", title: qsTr("Keep on shelf"), subtitle: qsTr("Drag it out later") }]
-        for (const t of claudeTerminals.slice(0, 3)) {
+        for (const t of claudeTerminals.slice(0, 2)) {
             const folder = t.cwd.split("/").filter(Boolean).pop() ?? t.cwd
             list.push({ kind: "claude", glyph: "@", title: qsTr("Send to Claude"), subtitle: `${folder} · ${t.app}`, terminalId: t.id })
         }
+        list.push({ kind: "chat", glyph: "✦", title: qsTr("Ask in chat"), subtitle: qsTr("Attach to a message") })
         list.push({ kind: "share", glyph: "↑", title: qsTr("Share link"),
                     subtitle: sharingOn ? qsTr("Upload and copy the link") : qsTr("Set up in settings") })
         return list
@@ -53,6 +55,8 @@ Row {
             shelve(urls)
         else if (tile.kind === "claude")
             sendToClaude(tile.terminalId, urls)
+        else if (tile.kind === "chat")
+            attachToChat(urls)
         else
             share(urls)
     }

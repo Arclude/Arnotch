@@ -8,11 +8,24 @@ Column {
     required property ListModel messages
     required property bool busy
     required property string mood
+    // Files waiting to go with the next message (absolute paths)
+    required property var attachments
+    // A file dialog is open: the island must not close when it takes the focus.
+    readonly property bool dialogOpen: dialogLoader.active
 
     signal asked(string text)
     signal stopped()
     signal cleared()
     signal cancelled()
+    signal attached(var paths)
+    signal detached(string path)
+
+    function toolText(name) {
+        return name === "WebSearch" || name === "web_search" ? qsTr("Searching the web…")
+             : name === "WebFetch" || name === "web_fetch" ? qsTr("Reading a web page…")
+             : name === "Read" ? qsTr("Reading a file…")
+             : qsTr("Looking through files…")
+    }
 
     function focusInput() {
         field.focusInput()
@@ -44,7 +57,7 @@ Column {
                 font.weight: Font.DemiBold
             }
             Text {
-                text: qsTr("Short answers, no tools. Uses your Claude Code login.")
+                text: qsTr("Attach files with 📎 or drop them on the island. Uses your Claude Code login.")
                 color: "#8b909a"
                 font.pixelSize: 11
             }
@@ -96,10 +109,30 @@ Column {
                     required property string who
                     required property string body
                     required property string status
+                    required property string files
+                    required property string tool
                     readonly property bool mine: who === "user"
 
                     width: column.width
-                    height: bubble.height
+                    height: bubble.height + (extra.visible ? extra.height + 4 : 0)
+
+                    // Attached files under a message, or the tool Claude is using
+                    Text {
+                        id: extra
+                        anchors.top: bubble.bottom
+                        anchors.topMargin: 4
+                        anchors.right: message.mine ? parent.right : undefined
+                        anchors.left: message.mine ? undefined : parent.left
+                        anchors.leftMargin: 2
+                        visible: text !== ""
+                        text: message.mine ? (message.files ? "📎 " + message.files.split("\n").join(", ") : "")
+                                           : (message.tool ? view.toolText(message.tool) : "")
+                        color: message.mine ? "#8b909a" : "#8fb4ff"
+                        font.pixelSize: 10
+                        font.italic: !message.mine
+                        elide: Text.ElideMiddle
+                        width: Math.min(implicitWidth, column.width)
+                    }
 
                     Rectangle {
                         id: bubble
@@ -151,13 +184,92 @@ Column {
         }
     }
 
+    // Files waiting to be sent
+    Flow {
+        width: view.width
+        spacing: 4
+        visible: view.attachments.length > 0
+
+        Repeater {
+            model: view.attachments
+
+            Rectangle {
+                id: chip
+
+                required property string modelData
+
+                width: chipText.implicitWidth + 30
+                height: 22
+                radius: 11
+                color: "#1affffff"
+
+                Text {
+                    id: chipText
+                    anchors.left: parent.left
+                    anchors.leftMargin: 9
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "📎 " + chip.modelData.split("/").pop()
+                    color: "#c9ccd2"
+                    font.pixelSize: 10
+                }
+                Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "×"
+                    color: "#8b909a"
+                    font.pixelSize: 12
+
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: view.detached(chip.modelData)
+                    }
+                }
+            }
+        }
+    }
+
+    Loader {
+        id: dialogLoader
+        active: false
+        source: "AttachDialog.qml"
+        onLoaded: item.open()
+
+        Connections {
+            target: dialogLoader.item
+            function onAccepted() {
+                const paths = []
+                for (const url of dialogLoader.item.selectedFiles) {
+                    const text = String(url)
+                    if (text.startsWith("file://"))
+                        paths.push(decodeURIComponent(text.slice("file://".length)))
+                }
+                view.attached(paths)
+                dialogLoader.active = false
+                view.focusInput()
+            }
+            function onRejected() {
+                dialogLoader.active = false
+            }
+        }
+    }
+
     Row {
         width: view.width
         spacing: 6
 
+        IconButton {
+            anchors.verticalCenter: parent.verticalCenter
+            glyph: "📎"
+            hint: qsTr("Attach files")
+            onClicked: dialogLoader.active = true
+        }
+
         SendField {
             id: field
-            width: parent.width - actions.width - parent.spacing
+            width: parent.width - actions.width - 26 - parent.spacing * 2
             monospace: false
             placeholder: view.messages.count ? qsTr("Reply to Claude…") : qsTr("Ask Claude…")
             onSubmitted: text => view.asked(text)

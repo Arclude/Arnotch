@@ -81,12 +81,15 @@ QtObject {
     property var uploads: []
     readonly property bool uploading: uploads.length > 0
     // The island's chat with Claude: rows of { who: "user" | "claude", body,
-    // status: "streaming" | "done" | "failed" | "stopped" }. A failed answer's body is the error.
+    // status: "streaming" | "done" | "failed" | "stopped", files: attached file names, one
+    // per line, tool: the tool Claude is using }. A failed answer's body is the error.
     // A ListModel, so a new piece of the answer updates one row instead of rebuilding them all.
     property ListModel chat: ListModel {
         // ListModel is not reactive inside functions, so bindings depend on `revision`.
         property int revision: 0
     }
+    // Files to send with the next chat message (absolute paths)
+    property var chatAttachments: []
     // The message being answered; chat events of other turns are leftovers of stopped answers.
     property int chatTurn: 0
     readonly property bool chatBusy: {
@@ -300,16 +303,21 @@ QtObject {
     }
 
     // Shows the user's message and an empty answer that `chat` events fill in.
-    function startChatTurn(turn, prompt) {
+    function startChatTurn(turn, prompt, files) {
         // A new message replaces an answer still being written.
         for (let i = 0; i < chat.count; i++) {
             if (chat.get(i).status === "streaming")
                 chat.setProperty(i, "status", "stopped")
         }
         chatTurn = turn
-        chat.append({ who: "user", body: prompt, status: "done" })
-        chat.append({ who: "claude", body: "", status: "streaming" })
+        const names = (files ?? []).map(path => path.split("/").pop()).join("\n")
+        chat.append({ who: "user", body: prompt, status: "done", files: names, tool: "" })
+        chat.append({ who: "claude", body: "", status: "streaming", files: "", tool: "" })
         chat.revision++
+    }
+
+    function addChatAttachments(paths) {
+        chatAttachments = chatAttachments.concat(paths.filter(p => !chatAttachments.includes(p)))
     }
 
     function clearChat() {
@@ -324,7 +332,11 @@ QtObject {
             return
         if (ev.state === "streaming") {
             chat.setProperty(last, "body", chat.get(last).body + ev.text)
+            chat.setProperty(last, "tool", "")
+        } else if (ev.state === "tool") {
+            chat.setProperty(last, "tool", ev.text)
         } else {
+            chat.setProperty(last, "tool", "")
             chat.setProperty(last, "status", ev.state)
             if (ev.state === "failed")
                 chat.setProperty(last, "body", ev.text)

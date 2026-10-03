@@ -69,7 +69,7 @@ Window {
     onActiveChanged: {
         if (active)
             closeDelay.stop()
-        else if (opened && wantsKeyboard)
+        else if (opened && wantsKeyboard && !chatView.dialogOpen)
             closeDelay.restart()
     }
 
@@ -486,6 +486,11 @@ Window {
                 onShelve: urls => root.dropped(() => root.shelve(urls))
                 onSendToClaude: (terminalId, urls) => root.dropped(() => root.sendToClaude(terminalId, urls))
                 onShare: urls => root.dropped(() => root.share(urls))
+                onAttachToChat: urls => root.dropped(() => {
+                    root.notch.addChatAttachments(root.notch.localPaths(urls))
+                    root.tab = "chat"
+                    root.opened = true
+                })
             }
 
             ShelfView {
@@ -511,7 +516,15 @@ Window {
                 messages: root.notch.chat
                 busy: root.notch.chatBusy
                 mood: root.notch.mood
-                onAsked: text => root.notch.startChatTurn(root.bridge.askClaude(text), text)
+                attachments: root.notch.chatAttachments
+                onAttached: paths => root.notch.addChatAttachments(paths)
+                onDetached: path => root.notch.chatAttachments = root.notch.chatAttachments.filter(p => p !== path)
+                onAsked: text => {
+                    const files = root.notch.chatAttachments
+                    const turn = root.bridge.askClaude(text, files.join("\n"), root.settings.chatWeb, root.settings.chatFiles)
+                    root.notch.startChatTurn(turn, text, files)
+                    root.notch.chatAttachments = []
+                }
                 onStopped: root.bridge.stopChat()
                 onCleared: {
                     root.bridge.newChat()

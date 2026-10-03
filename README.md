@@ -124,8 +124,10 @@ looks the same. `--uninstall` puts it back. Limits are shown for Pro and Max pla
 
 The *Chat* tab talks to Claude without opening a terminal. Each message runs the Claude Code
 CLI in print mode (`claude -p`), so it uses your Claude Code login and needs no API key; the
-conversation continues until you start a new one (+). It is a plain chat: no tools, no MCP
-servers and none of your Claude Code settings or hooks. The answer is streamed as it is
+conversation continues until you start a new one (+). Attach files with 📎 or by dropping them on the island (*Ask in
+chat*): images go to Claude as images, text files with their contents. In the settings, Claude
+can be allowed to search the web (on by default) and to read files on this computer (off); both
+are read-only. No MCP servers and none of your Claude Code settings or hooks are used. The answer is streamed as it is
 written; ■ stops it. Set `ARNOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
 
 On KDE Plasma, `contrib/install.sh` binds **Meta+Space** to open and close the chat (a custom

@@ -156,6 +156,20 @@ ApplicationWindow {
                 onEditingFinished: win.settings.calendarUrl = text.trim()
             }
 
+            Label { text: qsTr("Chat") }
+            Column {
+                Switch {
+                    text: qsTr("Claude can search the web")
+                    checked: win.settings.chatWeb
+                    onToggled: win.settings.chatWeb = checked
+                }
+                Switch {
+                    text: qsTr("Claude can read files on this computer")
+                    checked: win.settings.chatFiles
+                    onToggled: win.settings.chatFiles = checked
+                }
+            }
+
             Label { text: qsTr("Music") }
             Switch {
                 text: qsTr("Show the playing song in the closed island")

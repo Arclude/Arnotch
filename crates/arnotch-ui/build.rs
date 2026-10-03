@@ -28,6 +28,7 @@ fn main() {
         "qml/MeetingRow.qml",
         "qml/PromptPanel.qml",
         "qml/LimitsRow.qml",
+        "qml/AttachDialog.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

@@ -89,7 +89,13 @@ pub mod qobject {
         /// The answer arrives as `chat` events with that turn.
         #[qinvokable]
         #[cxx_name = "askClaude"]
-        fn ask_claude(self: &NotchBridge, prompt: &QString) -> u32;
+        fn ask_claude(
+            self: &NotchBridge,
+            prompt: &QString,
+            attachments: &QString,
+            web: bool,
+            files: bool,
+        ) -> u32;
 
         /// Stops the answer being written.
         #[qinvokable]
@@ -349,8 +355,26 @@ impl qobject::NotchBridge {
 }
 
 impl qobject::NotchBridge {
-    pub fn ask_claude(&self, prompt: &QString) -> u32 {
-        let prompt = prompt.to_string();
+    /// `attachments` holds one path per line; `web` and `files` turn on Claude's
+    /// read-only web and file tools.
+    pub fn ask_claude(
+        &self,
+        prompt: &QString,
+        attachments: &QString,
+        web: bool,
+        files: bool,
+    ) -> u32 {
+        let request = chat::Request {
+            prompt: prompt.to_string(),
+            attachments: attachments
+                .to_string()
+                .lines()
+                .filter(|p| !p.is_empty())
+                .map(PathBuf::from)
+                .collect(),
+            web,
+            files,
+        };
         // One answer at a time: a new message replaces the one being written.
         let (session_id, turn) = with_chat(|chat| {
             if let Some(pid) = chat.pid.take() {
@@ -365,7 +389,7 @@ impl qobject::NotchBridge {
 
         std::thread::spawn(move || {
             let result =
-                chat::ask(&session_id, chat::saved(&session_id), &prompt).and_then(|answer| {
+                chat::ask(&session_id, chat::saved(&session_id), &request).and_then(|answer| {
                     // Stopped before it started: don't let it run.
                     let current = with_chat(|chat| {
                         let current = chat.turn == turn && chat.session_id == session_id;
@@ -377,7 +401,10 @@ impl qobject::NotchBridge {
                     if !current {
                         chat::stop(answer.pid());
                     }
-                    answer.stream(|text| send(ChatState::Streaming, text.to_owned()))
+                    answer.stream(|piece| match piece {
+                        chat::Piece::Text(text) => send(ChatState::Streaming, text.to_owned()),
+                        chat::Piece::Tool(name) => send(ChatState::Tool, name.to_owned()),
+                    })
                 });
             // Still the current answer, or was it stopped or replaced?
             let current = with_chat(|chat| {
