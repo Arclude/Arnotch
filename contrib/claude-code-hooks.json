@@ -2,7 +2,7 @@
   "hooks": {
     "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
-    "PermissionRequest": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook", "timeout": 60}]}],
+    "PermissionRequest": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook", "timeout": 600}]}],
     "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "PostToolUseFailure": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "Notification": [{"hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],

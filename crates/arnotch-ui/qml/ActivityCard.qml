@@ -12,7 +12,10 @@ Item {
 
     // A pending permission request takes over the panel until it is answered.
     readonly property var permission: session.permission ?? null
-    readonly property string mode: permission ? (permission.diff ? "diff" : "ask") : (session.view ?? "")
+    // A plan to approve or questions to answer: more than a yes or no.
+    readonly property bool prompting: permission !== null && (permission.plan != null || permission.questions != null)
+    readonly property string mode: prompting ? "prompt"
+                                  : permission ? (permission.diff ? "diff" : "ask") : (session.view ?? "")
     readonly property var shownDiff: permission ? permission.diff : session.diff
 
     readonly property int maxDiffLines: 10
@@ -20,6 +23,8 @@ Item {
 
     // "allow", "deny" or "ask" (answer in the terminal)
     signal answered(string decision)
+    // A plan approval or answers: { decision, mode, answers, message } (see PromptPanel)
+    signal answeredWith(var reply)
     signal replied(string text)
 
     // Terminal of this Claude session, empty when replies can't be typed into it.
@@ -28,6 +33,8 @@ Item {
     readonly property bool canReply: replyTerminalId !== "" && !permission
                                      && (session.phase === "waiting" || session.phase === "done")
     property bool replying: false
+    // A text field of the card is open: the island takes the keyboard.
+    readonly property bool wantsKeyboard: replying || (promptPanel.visible && promptPanel.typing)
     onCanReplyChanged: if (!canReply) replying = false
 
     implicitHeight: Math.max(sidebar.implicitHeight,
@@ -155,7 +162,8 @@ Item {
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
-                    text: card.permission ? qsTr("Allow %1?").arg(card.permission.tool) + (card.mode === "diff" ? "  " + card.shownDiff.file : "")
+                    text: card.mode === "prompt" ? (card.permission.plan != null ? qsTr("Approve the plan?") : qsTr("Claude asks"))
+                        : card.permission ? qsTr("Allow %1?").arg(card.permission.tool) + (card.mode === "diff" ? "  " + card.shownDiff.file : "")
                         : card.mode === "diff" ? card.shownDiff.file
                         : "$ " + card.session.command
                     color: "#c9ccd2"
@@ -278,8 +286,15 @@ Item {
                 font.family: "monospace"
             }
 
+            PromptPanel {
+                id: promptPanel
+                visible: card.mode === "prompt"
+                permission: card.prompting ? card.permission : ({ request_id: "", tool: "" })
+                onReplied: reply => card.answeredWith(reply)
+            }
+
             Row {
-                visible: card.permission !== null
+                visible: card.permission !== null && card.mode !== "prompt"
                 spacing: 6
                 topPadding: 2
 

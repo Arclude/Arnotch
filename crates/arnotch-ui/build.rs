@@ -26,6 +26,7 @@ fn main() {
         "qml/MediaCard.qml",
         "qml/LevelIndicator.qml",
         "qml/MeetingRow.qml",
+        "qml/PromptPanel.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

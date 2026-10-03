@@ -166,7 +166,15 @@ with its recent steps, a live diff of each file edit and the output of commands 
 The hook takes about 1 ms and never fails or blocks, even when arnotch is not running.
 
 When Claude asks for permission, the island shows the command or diff with **Allow**, **Deny** and
-**Ask in terminal** buttons. `arnotchctl answer allow|deny|ask` answers the latest request, which is
+**Ask in terminal** buttons.
+
+Plans and questions are answered there too. At the end of plan mode the island shows the plan
+with **Approve, auto-accept edits**, **Approve, I'll review each edit** and **Keep planning…**,
+which sends Claude a note on what to change. When Claude asks multiple-choice questions, pick
+the options (or type your own answer) and **Send**. These wait 5 minutes in the island
+(`ARNOTCH_PROMPT_TIMEOUT`); `contrib/install.sh` gives the permission hook a 600 s timeout so
+Claude Code doesn't cut it off sooner. Scripts can answer with
+`arnotchctl send '{"type":"answer","decision":"allow","answers":{"Which color?":"Blue"}}'`. `arnotchctl answer allow|deny|ask` answers the latest request, which is
 handy on a global shortcut. Without an answer within 45 seconds (`ARNOTCH_PERMISSION_TIMEOUT`), or
 when arnotch is not running, Claude Code simply asks in the terminal as usual.
 

@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::diff;
-use crate::event::{AgentPhase, Decision, Diff, Event};
+use crate::event::{AgentPhase, Decision, Diff, Event, Reply};
 
 /// How many lines of command output the island shows.
 const OUTPUT_LINES: usize = 6;
@@ -74,6 +74,10 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
                 .unwrap_or_else(|| format!("{}-{}", input.session_id, std::process::id())),
             detail: tool_detail(&tool, &input.tool_input),
             diff: file_diff(&tool, &input.tool_input),
+            plan: (tool == "ExitPlanMode").then(|| str_field(&input.tool_input, "plan").to_owned()),
+            questions: (tool == "AskUserQuestion")
+                .then(|| input.tool_input.get("questions").cloned())
+                .flatten(),
             tool,
         },
         // Only notifications that need an answer mean Claude waits for the user. The
@@ -103,14 +107,50 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
     }))
 }
 
-/// What the hook prints so Claude Code applies the user's decision.
-/// `None` lets Claude Code ask in the terminal as usual.
-pub fn permission_output(decision: Decision) -> Option<String> {
-    let decision = match decision {
+/// Whether the tool waits for the user's own input (a plan to approve, questions to
+/// answer) rather than a plain yes or no, so the island waits longer for it.
+pub fn needs_input(hook_json: &str) -> bool {
+    serde_json::from_str::<HookInput>(hook_json).is_ok_and(|input| {
+        matches!(
+            input.tool_name.as_deref(),
+            Some("ExitPlanMode" | "AskUserQuestion")
+        )
+    })
+}
+
+/// What the hook prints so Claude Code applies the user's reply to the request in
+/// `hook_json`. `None` lets Claude Code ask in the terminal as usual.
+///
+/// A plan approval and questions need more than "allow": the tool's input goes back
+/// with the answers (`updatedInput`), and approving a plan sets the permission mode
+/// to carry on in (`updatedPermissions`).
+pub fn permission_output(reply: &Reply, hook_json: &str) -> Option<String> {
+    let input: HookInput = serde_json::from_str(hook_json).ok()?;
+    let tool = input.tool_name.as_deref().unwrap_or_default();
+    let decision = match reply.decision {
+        Decision::Allow if tool == "AskUserQuestion" => {
+            let mut updated = input.tool_input.clone();
+            updated
+                .as_object_mut()?
+                .insert("answers".into(), reply.answers.clone()?.into());
+            serde_json::json!({ "behavior": "allow", "updatedInput": updated })
+        }
+        Decision::Allow if tool == "ExitPlanMode" => {
+            let mut decision =
+                serde_json::json!({ "behavior": "allow", "updatedInput": input.tool_input });
+            if let Some(mode) = &reply.mode {
+                decision["updatedPermissions"] = serde_json::json!([{ "type": "setMode", "mode": mode, "destination": "session" }]);
+            }
+            decision
+        }
         Decision::Allow => serde_json::json!({ "behavior": "allow" }),
         Decision::Deny => serde_json::json!({
             "behavior": "deny",
-            "message": crate::i18n::tr("Denied from arnotch"),
+            "message": reply
+                .message
+                .clone()
+                .filter(|m| !m.trim().is_empty())
+                .unwrap_or_else(|| crate::i18n::tr("Denied from arnotch").into()),
         }),
         Decision::Ask => return None,
     };
@@ -399,20 +439,108 @@ mod tests {
                 tool: "Bash".into(),
                 detail: "rm -rf /tmp/build".into(),
                 diff: None,
+                plan: None,
+                questions: None,
             }
         );
     }
 
+    const BASH_REQUEST: &str = r#"{"session_id":"abc","cwd":"/x","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+
+    fn output(reply: Reply, request: &str) -> Value {
+        serde_json::from_str(&permission_output(&reply, request).unwrap()).unwrap()
+    }
+
     #[test]
     fn decisions_become_hook_output() {
-        let allow: Value =
-            serde_json::from_str(&permission_output(Decision::Allow).unwrap()).unwrap();
+        let allow = output(Decision::Allow.into(), BASH_REQUEST);
         assert_eq!(
             allow["hookSpecificOutput"]["hookEventName"],
             "PermissionRequest"
         );
         assert_eq!(allow["hookSpecificOutput"]["decision"]["behavior"], "allow");
-        assert_eq!(permission_output(Decision::Ask), None);
+        assert_eq!(permission_output(&Decision::Ask.into(), BASH_REQUEST), None);
+
+        let deny = output(
+            Reply {
+                decision: Decision::Deny,
+                message: Some("not now".into()),
+                ..Default::default()
+            },
+            BASH_REQUEST,
+        );
+        assert_eq!(deny["hookSpecificOutput"]["decision"]["message"], "not now");
+    }
+
+    #[test]
+    fn answers_questions_with_the_tool_input() {
+        let request = r#"{"session_id":"abc","cwd":"/x","hook_event_name":"PermissionRequest","tool_name":"AskUserQuestion",
+            "tool_input":{"questions":[{"question":"Which framework?","header":"Framework","options":[{"label":"React"},{"label":"Vue"}],"multiSelect":false}]}}"#;
+        assert!(needs_input(request));
+        let Some(Event::Agent {
+            phase: AgentPhase::Permission { questions, .. },
+            ..
+        }) = event_from_hook(request).unwrap()
+        else {
+            panic!("not a permission request");
+        };
+        assert_eq!(questions.unwrap()[0]["header"], "Framework");
+
+        let mut answers = serde_json::Map::new();
+        answers.insert("Which framework?".into(), "Vue".into());
+        let reply = Reply {
+            decision: Decision::Allow,
+            answers: Some(answers),
+            ..Default::default()
+        };
+        let decision = &output(reply, request)["hookSpecificOutput"]["decision"];
+        assert_eq!(decision["behavior"], "allow");
+        assert_eq!(
+            decision["updatedInput"]["answers"]["Which framework?"],
+            "Vue"
+        );
+        assert_eq!(
+            decision["updatedInput"]["questions"][0]["question"],
+            "Which framework?"
+        );
+
+        // Allowing without answers can't satisfy the tool: ask in the terminal instead.
+        assert_eq!(permission_output(&Decision::Allow.into(), request), None);
+    }
+
+    #[test]
+    fn approves_plans_in_a_permission_mode() {
+        let request = r#"{"session_id":"abc","cwd":"/x","hook_event_name":"PermissionRequest","tool_name":"ExitPlanMode",
+            "tool_input":{"plan":"Plan\n1. Do it","planFilePath":"/p.md"}}"#;
+        let Some(Event::Agent {
+            phase: AgentPhase::Permission { plan, .. },
+            ..
+        }) = event_from_hook(request).unwrap()
+        else {
+            panic!("not a permission request");
+        };
+        assert_eq!(plan.as_deref(), Some("Plan\n1. Do it"));
+
+        let reply = Reply {
+            decision: Decision::Allow,
+            mode: Some("acceptEdits".into()),
+            ..Default::default()
+        };
+        let decision = &output(reply, request)["hookSpecificOutput"]["decision"];
+        assert_eq!(decision["updatedInput"]["planFilePath"], "/p.md");
+        assert_eq!(decision["updatedPermissions"][0]["type"], "setMode");
+        assert_eq!(decision["updatedPermissions"][0]["mode"], "acceptEdits");
+        assert_eq!(decision["updatedPermissions"][0]["destination"], "session");
+
+        let keep = Reply {
+            decision: Decision::Deny,
+            message: Some("Add tests".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            output(keep, request)["hookSpecificOutput"]["decision"]["message"],
+            "Add tests"
+        );
     }
 
     #[test]

@@ -107,6 +107,8 @@ QtObject {
     readonly property int maxSteps: 5
     // Matches arnotchctl's default wait before Claude Code falls back to the terminal.
     readonly property int permissionTimeout: 45000
+    // ...and for plan approvals and questions (ARNOTCH_PROMPT_TIMEOUT)
+    readonly property int promptTimeout: 300000
 
     function indexOf(sessionId) {
         for (let i = 0; i < sessions.count; i++) {
@@ -205,7 +207,10 @@ QtObject {
         } else if (ev.phase === "waiting") {
             say(ev.project, ev.message || qsTr("Needs your attention"), 6000)
         } else if (ev.phase === "permission") {
-            say(ev.project, qsTr("Wants to run %1").arg(ev.tool), permissionTimeout)
+            // Plans and questions take reading: they stay up as long as arnotchctl waits.
+            const needsInput = ev.plan != null || ev.questions != null
+            say(ev.project, ev.plan != null ? qsTr("Plan ready for review") : ev.questions != null ? qsTr("Claude has a question")
+                            : qsTr("Wants to run %1").arg(ev.tool), needsInput ? promptTimeout : permissionTimeout)
             permissionRequested(ev.request_id)
         } else if (ev.phase === "started") {
             headline = ev.project
@@ -222,7 +227,8 @@ QtObject {
             d.cwd = ev.cwd
 
         if (ev.phase === "permission") {
-            d.permission = { request_id: ev.request_id, tool: ev.tool, detail: ev.detail, diff: ev.diff ?? null }
+            d.permission = { request_id: ev.request_id, tool: ev.tool, detail: ev.detail, diff: ev.diff ?? null,
+                             plan: ev.plan ?? null, questions: ev.questions ?? null }
         } else if (ev.phase === "started") {
             d.prompt = ev.prompt || ""
             d.steps = []

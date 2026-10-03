@@ -62,6 +62,31 @@ with open(settings_file, "w") as f:
 print(f"Claude Code hooks now call arnotchctl ({settings_file})")
 EOF
 fi
+# Plan approvals and questions wait up to 5 minutes in the island: older installs gave
+# the permission hook 60 seconds, after which Claude Code cuts it off.
+if [ -f "$claude_settings" ] && grep -q 'arnotchctl' "$claude_settings"; then
+    python3 - "$claude_settings" <<'EOF'
+import json, shutil, sys, time
+
+settings_file = sys.argv[1]
+with open(settings_file) as f:
+    settings = json.load(f)
+hooks = [
+    hook
+    for group in settings.get("hooks", {}).get("PermissionRequest", [])
+    for hook in group.get("hooks", [])
+    if "arnotchctl" in hook.get("command", "") and hook.get("timeout", 600) < 600
+]
+if hooks:
+    shutil.copy2(settings_file, f"{settings_file}.bak.{time.strftime('%Y%m%d-%H%M%S')}")
+    for hook in hooks:
+        hook["timeout"] = 600
+    with open(settings_file, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+    print("Claude Code permission hook: timeout raised to 600 s for plans and questions")
+EOF
+fi
 if [ -e "$units/notch.service" ] || [ -e "$bin/notch" ]; then
     systemctl --user disable --now notch.service 2>/dev/null || true
     rm -f "$units/notch.service" "$bin/notch" "$bin/notchctl"

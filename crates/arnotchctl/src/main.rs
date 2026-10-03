@@ -17,7 +17,7 @@ use std::io::Read;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use arnotch_core::{AgentPhase, Event, claude, ipc};
+use arnotch_core::{AgentPhase, Decision, Event, claude, ipc};
 
 const USAGE: &str = "usage:
   arnotchctl notify <title> [body]
@@ -48,13 +48,17 @@ fn main() -> ExitCode {
             tab: rest.first().map(|tab| (*tab).to_owned()),
         }),
         ["close"] => send(&Event::Close),
-        ["answer", decision] => match serde_json::from_value(serde_json::json!(decision)) {
-            Ok(decision) => send(&Event::Answer { decision }),
-            Err(_) => {
-                eprintln!("arnotchctl: the answer must be allow, deny or ask");
-                ExitCode::from(2)
+        ["answer", decision] => {
+            match serde_json::from_value::<Decision>(serde_json::json!(decision)) {
+                Ok(decision) => send(&Event::Answer {
+                    reply: decision.into(),
+                }),
+                Err(_) => {
+                    eprintln!("arnotchctl: the answer must be allow, deny or ask");
+                    ExitCode::from(2)
+                }
             }
-        },
+        }
         ["shelf", files @ ..] if !files.is_empty() => {
             match files.iter().map(|f| absolute(f)).collect() {
                 Ok(paths) => send(&Event::Shelve { paths }),
@@ -129,8 +133,13 @@ fn claude_hook() -> ExitCode {
     {
         // Wait for the user to answer in the island. Without an answer, print nothing:
         // Claude Code then asks in the terminal as usual.
-        if let Ok(Some(decision)) = ipc::request(&event, permission_timeout())
-            && let Some(output) = claude::permission_output(decision)
+        let timeout = if claude::needs_input(&input) {
+            prompt_timeout()
+        } else {
+            permission_timeout()
+        };
+        if let Ok(Some(reply)) = ipc::request(&event, timeout)
+            && let Some(output) = claude::permission_output(&reply, &input)
         {
             println!("{output}");
         }
@@ -138,6 +147,17 @@ fn claude_hook() -> ExitCode {
         _ = ipc::send(&event);
     }
     ExitCode::SUCCESS
+}
+
+/// How long a plan approval or a question waits in the island, which takes reading:
+/// 5 minutes, or `ARNOTCH_PROMPT_TIMEOUT` seconds. (The hook's own timeout in Claude
+/// Code's settings must be longer.)
+fn prompt_timeout() -> Duration {
+    let secs = std::env::var("ARNOTCH_PROMPT_TIMEOUT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300);
+    Duration::from_secs(secs)
 }
 
 /// How long a permission request waits in the island before falling back to the terminal.

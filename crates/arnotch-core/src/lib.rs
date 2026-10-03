@@ -16,4 +16,4 @@ pub mod share;
 pub mod system;
 pub mod terminals;
 
-pub use event::{AgentPhase, Decision, Event};
+pub use event::{AgentPhase, Decision, Event, Reply};

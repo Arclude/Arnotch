@@ -42,8 +42,12 @@ pub enum Event {
     Shelve { paths: Vec<String> },
     /// Share a file (absolute path) with the service chosen in the settings.
     Share { path: String },
-    /// Answer the most recent pending permission request.
-    Answer { decision: Decision },
+    /// Answer the most recent pending permission request, e.g.
+    /// `{"type":"answer","decision":"allow","answers":{"Which framework?":"Vue"}}`.
+    Answer {
+        #[serde(flatten)]
+        reply: Reply,
+    },
     /// The open terminals, published by the notch itself (never accepted from clients).
     #[serde(skip_deserializing)]
     Terminals { terminals: Vec<Terminal> },
@@ -133,6 +137,13 @@ pub enum AgentPhase {
         detail: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         diff: Option<Diff>,
+        /// ExitPlanMode: the plan to approve, in Markdown.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<String>,
+        /// AskUserQuestion: the questions, as Claude Code sends them
+        /// (`[{question, header, options: [{label, description}], multiSelect}]`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        questions: Option<serde_json::Value>,
     },
     /// The agent needs the user (permission prompt, idle input, ...).
     Waiting { message: String },
@@ -176,13 +187,40 @@ impl Event {
     }
 }
 
-/// The user's answer to an [`AgentPhase::Permission`] request.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+/// The user's answer to an [`AgentPhase::Permission`] request: the decision, and what
+/// plan approvals and questions need besides it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct Reply {
+    pub decision: Decision,
+    /// AskUserQuestion: question text to the chosen option label (labels joined with ", "
+    /// for multiple choice), or the user's own answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answers: Option<serde_json::Map<String, serde_json::Value>>,
+    /// ExitPlanMode: the permission mode to carry on in, such as "acceptEdits" or "default".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// Deny: a note for Claude, e.g. what to change in the plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+impl From<Decision> for Reply {
+    fn from(decision: Decision) -> Self {
+        Reply {
+            decision,
+            ..Default::default()
+        }
+    }
+}
+
+/// The user's decision on an [`AgentPhase::Permission`] request.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Decision {
     Allow,
     Deny,
     /// Let the agent ask in its terminal as usual.
+    #[default]
     Ask,
 }
 

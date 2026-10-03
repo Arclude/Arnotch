@@ -2,7 +2,7 @@
 //! the notch broadcasts them to every subscriber (the UI, later: plugins).
 //!
 //! Permission requests are the one exchange that goes both ways: the client keeps
-//! its connection open and receives the user's [`Decision`] as one line of JSON.
+//! its connection open and receives the user's [`Reply`] as one line of JSON.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader as StdBufReader, Write};
@@ -15,10 +15,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{broadcast, oneshot};
 
-use crate::event::{AgentPhase, Decision, Event};
+use crate::event::{AgentPhase, Event, Reply};
 
 /// Permission requests waiting for the user, by request id, with when they arrived.
-type Pending = HashMap<String, (Instant, oneshot::Sender<Decision>)>;
+type Pending = HashMap<String, (Instant, oneshot::Sender<Reply>)>;
 static PENDING: LazyLock<Mutex<Pending>> = LazyLock::new(Default::default);
 
 /// `$XDG_RUNTIME_DIR/arnotch.sock`, falling back to `/tmp/arnotch-$UID.sock`.
@@ -41,9 +41,9 @@ pub fn send(event: &Event) -> std::io::Result<()> {
     stream.write_all(event.to_line().as_bytes())
 }
 
-/// Sends a permission request and waits up to `timeout` for the user's decision.
+/// Sends a permission request and waits up to `timeout` for the user's reply.
 /// `None` means nobody answered (or no notch runs): the caller should fall back.
-pub fn request(event: &Event, timeout: Duration) -> std::io::Result<Option<Decision>> {
+pub fn request(event: &Event, timeout: Duration) -> std::io::Result<Option<Reply>> {
     let mut stream = StdUnixStream::connect(socket_path())?;
     stream.set_write_timeout(Some(Duration::from_millis(500)))?;
     stream.write_all(event.to_line().as_bytes())?;
@@ -65,15 +65,15 @@ pub fn request(event: &Event, timeout: Duration) -> std::io::Result<Option<Decis
     }
 }
 
-/// Delivers the user's decision. Returns false when the request is gone
+/// Delivers the user's reply. Returns false when the request is gone
 /// (answered elsewhere or abandoned by its client).
-pub fn answer(request_id: &str, decision: Decision) -> bool {
+pub fn answer(request_id: &str, reply: Reply) -> bool {
     let pending = PENDING.lock().unwrap().remove(request_id);
-    pending.is_some_and(|(_, sender)| sender.send(decision).is_ok())
+    pending.is_some_and(|(_, sender)| sender.send(reply).is_ok())
 }
 
 /// Answers the newest pending request, e.g. from a keyboard shortcut.
-pub fn answer_latest(decision: Decision) -> bool {
+pub fn answer_latest(reply: Reply) -> bool {
     let latest = {
         let pending = PENDING.lock().unwrap();
         pending
@@ -81,7 +81,7 @@ pub fn answer_latest(decision: Decision) -> bool {
             .max_by_key(|(_, (at, _))| *at)
             .map(|(id, _)| id.clone())
     };
-    latest.is_some_and(|id| answer(&id, decision))
+    latest.is_some_and(|id| answer(&id, reply))
 }
 
 /// Binds the socket, refusing to steal it from a notch that is already running.
@@ -130,8 +130,8 @@ async fn handle_client(stream: UnixStream, events: broadcast::Sender<Event>) {
                         _ = events.send(Event::PermissionClosed { request_id });
                         break;
                     }
-                    if let Event::Answer { decision } = event {
-                        answer_latest(decision);
+                    if let Event::Answer { reply } = event {
+                        answer_latest(reply);
                         continue;
                     }
                     // Sending only fails when nobody is subscribed; dropping the event is fine then.
@@ -164,7 +164,7 @@ async fn await_decision(
     event: Event,
     events: &broadcast::Sender<Event>,
     lines: &mut tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
-) -> Option<Decision> {
+) -> Option<Reply> {
     let (sender, receiver) = oneshot::channel();
     PENDING
         .lock()

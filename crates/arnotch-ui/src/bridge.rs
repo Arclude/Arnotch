@@ -38,6 +38,16 @@ pub mod qobject {
         #[cxx_name = "interruptCommand"]
         fn interrupt_command(self: &NotchBridge, shell_pid: u32) -> bool;
 
+        /// Answers a pending plan approval or question: a JSON [`Reply`]
+        /// (`{"decision": "allow", "answers": {...}, "mode": "...", "message": "..."}`).
+        #[qinvokable]
+        #[cxx_name = "answerPermissionWith"]
+        fn answer_permission_with(
+            self: &NotchBridge,
+            request_id: &QString,
+            reply: &QString,
+        ) -> bool;
+
         /// Answers a pending permission request: "allow", "deny" or "ask".
         #[qinvokable]
         #[cxx_name = "answerPermission"]
@@ -204,7 +214,17 @@ impl qobject::NotchBridge {
             "deny" => Decision::Deny,
             _ => Decision::Ask,
         };
-        ipc::answer(&request_id.to_string(), decision)
+        ipc::answer(&request_id.to_string(), decision.into())
+    }
+
+    pub fn answer_permission_with(&self, request_id: &QString, reply: &QString) -> bool {
+        match serde_json::from_str::<arnotch_core::Reply>(&reply.to_string()) {
+            Ok(reply) => ipc::answer(&request_id.to_string(), reply),
+            Err(err) => {
+                tracing::warn!("invalid reply from the island: {err}");
+                false
+            }
+        }
     }
 
     pub fn share_file(&self, path: &QString, service: &QString, command: &QString) {

@@ -60,7 +60,7 @@ Window {
     readonly property int maxExpandedWidth: 640
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
-    readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.replying
+    readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.wantsKeyboard
                                                        || shownTab === "chat")
     // Later: the window must first lose Qt.WindowDoesNotAcceptFocus (see flags).
     onWantsKeyboardChanged: if (wantsKeyboard) Qt.callLater(requestActivate)
@@ -543,6 +543,11 @@ Window {
                 onAnswered: decision => {
                     const requestId = root.notch.focus.permission.request_id
                     root.bridge.answerPermission(requestId, decision)
+                    root.notch.closePermission(requestId)
+                }
+                onAnsweredWith: reply => {
+                    const requestId = root.notch.focus.permission.request_id
+                    root.bridge.answerPermissionWith(requestId, JSON.stringify(reply))
                     root.notch.closePermission(requestId)
                 }
             }

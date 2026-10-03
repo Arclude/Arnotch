@@ -4,62 +4,72 @@
 <context>
     <name>ActivityCard</name>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="158"/>
+        <location filename="../qml/ActivityCard.qml" line="165"/>
+        <source>Approve the plan?</source>
+        <translation>Plan onaylansın mı?</translation>
+    </message>
+    <message>
+        <location filename="../qml/ActivityCard.qml" line="165"/>
+        <source>Claude asks</source>
+        <translation>Claude soruyor</translation>
+    </message>
+    <message>
+        <location filename="../qml/ActivityCard.qml" line="166"/>
         <source>Allow %1?</source>
         <translation>%1 çalıştırılsın mı?</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="171"/>
+        <location filename="../qml/ActivityCard.qml" line="179"/>
         <source>✓ done</source>
         <translation>✓ bitti</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="172"/>
+        <location filename="../qml/ActivityCard.qml" line="180"/>
         <source>✗ failed</source>
         <translation>✗ başarısız</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="173"/>
+        <location filename="../qml/ActivityCard.qml" line="181"/>
         <source>running…</source>
         <translation>çalışıyor…</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="261"/>
+        <location filename="../qml/ActivityCard.qml" line="269"/>
         <source>waiting for output…</source>
         <translation>çıktı bekleniyor…</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="261"/>
+        <location filename="../qml/ActivityCard.qml" line="269"/>
         <source>(no output)</source>
         <translation>(çıktı yok)</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="287"/>
+        <location filename="../qml/ActivityCard.qml" line="302"/>
         <source>Allow</source>
         <translation>İzin ver</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="293"/>
+        <location filename="../qml/ActivityCard.qml" line="308"/>
         <source>Deny</source>
         <translation>Reddet</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="298"/>
+        <location filename="../qml/ActivityCard.qml" line="313"/>
         <source>Ask in terminal</source>
         <translation>Terminalde sor</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="320"/>
+        <location filename="../qml/ActivityCard.qml" line="335"/>
         <source>Send next prompt</source>
         <translation>Sonraki isteği gönder</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="320"/>
+        <location filename="../qml/ActivityCard.qml" line="335"/>
         <source>Reply to Claude</source>
         <translation>Claude&apos;a cevap ver</translation>
     </message>
     <message>
-        <location filename="../qml/ActivityCard.qml" line="329"/>
+        <location filename="../qml/ActivityCard.qml" line="344"/>
         <source>Message to Claude…</source>
         <translation>Claude&apos;a mesaj…</translation>
     </message>
@@ -275,54 +285,113 @@
         <translation>Her şey sakin</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="204"/>
+        <location filename="../qml/NotchState.qml" line="206"/>
         <source>Finished</source>
         <translation>Bitti</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="206"/>
+        <location filename="../qml/NotchState.qml" line="208"/>
         <source>Needs your attention</source>
         <translation>Seni bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="208"/>
+        <location filename="../qml/NotchState.qml" line="212"/>
+        <source>Plan ready for review</source>
+        <translation>Plan onayını bekliyor</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="212"/>
+        <source>Claude has a question</source>
+        <translation>Claude&apos;un bir sorusu var</translation>
+    </message>
+    <message>
+        <location filename="../qml/NotchState.qml" line="213"/>
         <source>Wants to run %1</source>
         <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="212"/>
+        <location filename="../qml/NotchState.qml" line="217"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="280"/>
+        <location filename="../qml/NotchState.qml" line="286"/>
         <source>Link copied</source>
         <translation>Link kopyalandı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="282"/>
+        <location filename="../qml/NotchState.qml" line="288"/>
         <source>Couldn&apos;t share %1</source>
         <translation>%1 paylaşılamadı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="330"/>
+        <location filename="../qml/NotchState.qml" line="336"/>
         <source>In %1 min: %2</source>
         <translation>%1 dk sonra: %2</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="332"/>
+        <location filename="../qml/NotchState.qml" line="338"/>
         <source>Starting now: %1</source>
         <translation>Şimdi başlıyor: %1</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="353"/>
+        <location filename="../qml/NotchState.qml" line="359"/>
         <source>Battery low</source>
         <translation>Pil azaldı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="353"/>
+        <location filename="../qml/NotchState.qml" line="359"/>
         <source>%1% left</source>
         <translation>%%1 kaldı</translation>
+    </message>
+</context>
+<context>
+    <name>PromptPanel</name>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="101"/>
+        <source>Approve, auto-accept edits</source>
+        <translation>Onayla, düzenlemeleri otomatik kabul et</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="107"/>
+        <source>Approve, I&apos;ll review each edit</source>
+        <translation>Onayla, her düzenlemeyi ben onaylayayım</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="112"/>
+        <source>Keep planning…</source>
+        <translation>Planlamaya devam et…</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="117"/>
+        <location filename="../qml/PromptPanel.qml" line="290"/>
+        <source>In terminal</source>
+        <translation>Terminalde</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="127"/>
+        <source>What should change? (Enter sends, Esc goes back)</source>
+        <translation>Neyin değişmesini istersin? (Enter gönderir, Esc geri döner)</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="251"/>
+        <source>Your answer: %1  (change)</source>
+        <translation>Cevabın: %1  (değiştir)</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="251"/>
+        <source>Other answer…</source>
+        <translation>Başka bir cevap…</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="266"/>
+        <source>Your answer (Enter keeps it, Esc goes back)</source>
+        <translation>Cevabın (Enter kaydeder, Esc geri döner)</translation>
+    </message>
+    <message>
+        <location filename="../qml/PromptPanel.qml" line="283"/>
+        <source>Send</source>
+        <translation>Gönder</translation>
     </message>
 </context>
 <context>
