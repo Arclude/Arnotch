@@ -156,6 +156,13 @@ ApplicationWindow {
                 onEditingFinished: win.settings.calendarUrl = text.trim()
             }
 
+            Label { text: qsTr("Music") }
+            Switch {
+                text: qsTr("Show the playing song in the closed island")
+                checked: win.settings.compactMedia
+                onToggled: win.settings.compactMedia = checked
+            }
+
             Label { text: qsTr("Indicators") }
             Switch {
                 text: qsTr("Show volume, brightness and battery changes")

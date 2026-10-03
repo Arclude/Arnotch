@@ -62,6 +62,9 @@ QtObject {
 
     // What's playing (see MediaCard), null when no player has a track.
     property var media: null
+    // Playing, or paused less than half a minute ago (so it can be resumed from the
+    // closed island).
+    readonly property bool mediaActive: media !== null && (media.playing || pauseGrace.running)
 
     // Paths of the files kept on the shelf; Main persists them.
     property var shelf: []
@@ -140,7 +143,12 @@ QtObject {
         } else if (ev.type === "clipboard") {
             clipboard = ev.items
         } else if (ev.type === "media") {
+            const wasPlaying = media !== null && media.playing
             media = ev.player ?? null
+            if (media && media.playing)
+                pauseGrace.stop()
+            else if (wasPlaying && media)
+                pauseGrace.restart()
         } else if (ev.type === "chat") {
             handleChat(ev)
         } else if (ev.type === "permission_closed") {
@@ -397,6 +405,7 @@ QtObject {
     }
     property Timer activityTimer: Timer { interval: 3500 }
     property Timer levelTimer: Timer { interval: 1600 }
+    property Timer pauseGrace: Timer { interval: 30000 }
 
     property Timer happyTimer: Timer {
         interval: 3000

@@ -20,6 +20,33 @@ Column {
 
     spacing: 4
 
+    // The rows, updated in place by terminal id: rebuilding them on every rescan (once a
+    // second while shown) reset their hover state and any text being typed.
+    ListModel { id: rows }
+
+    onTerminalsChanged: syncRows()
+    Component.onCompleted: syncRows()
+
+    function syncRows() {
+        for (let i = 0; i < terminals.length; i++) {
+            const t = terminals[i]
+            const json = JSON.stringify(t)
+            let j = i
+            while (j < rows.count && rows.get(j).id !== t.id)
+                j++
+            if (j === rows.count) {
+                rows.insert(i, { id: t.id, json: json })
+                continue
+            }
+            if (j !== i)
+                rows.move(j, i, 1)
+            if (rows.get(i).json !== json)
+                rows.setProperty(i, "json", json)
+        }
+        if (rows.count > terminals.length)
+            rows.remove(terminals.length, rows.count - terminals.length)
+    }
+
     onVisibleChanged: {
         bridge.setTerminalsVisible(visible)
         if (!visible)
@@ -56,12 +83,13 @@ Column {
     }
 
     Repeater {
-        model: view.terminals
+        model: rows
 
         Column {
             id: entry
 
-            required property var modelData
+            required property string json
+            readonly property var modelData: JSON.parse(json)
             readonly property bool editing: view.editingId === modelData.id
 
             width: view.width

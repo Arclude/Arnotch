@@ -37,6 +37,8 @@ Window {
     readonly property int collapsedWidth: 190
     // Volume, brightness or charge just changed: the closed island widens to show it.
     readonly property bool levelShown: notch.showingLevel && !expanded
+    // Music playing: the closed island shows the song and a pause button.
+    readonly property bool mediaShown: settings.compactMedia && notch.mediaActive && !levelShown && !expanded
     // Matches the top panel by default, so the closed island never covers windows.
     readonly property int collapsedHeight: settings.height
     // The tab picked by the user; an island opened by an event always shows activity.
@@ -217,7 +219,8 @@ Window {
 
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
-        width: root.expanded ? root.expandedWidth : root.levelShown ? 310 : root.collapsedWidth
+        width: root.expanded ? root.expandedWidth : root.levelShown ? 310
+             : root.mediaShown ? (root.notch.sessions.count > 0 ? 420 : 380) : root.collapsedWidth
         height: root.expanded ? root.expandedHeight : root.collapsedHeight
         topLeftRadius: 0
         topRightRadius: 0
@@ -280,9 +283,50 @@ Window {
                 muted: root.notch.level ? root.notch.level.muted : false
             }
 
+            // The playing song: cover, title and artist, and a pause button on the right
+            Item {
+                id: compactMedia
+                anchors.fill: parent
+                visible: root.mediaShown
+
+                readonly property var player: root.notch.media ?? ({ title: "", artist: "", art_url: "", playing: false, bus_name: "" })
+
+                MediaCard.Cover {
+                    id: compactCover
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12 + Math.round(root.collapsedHeight * 0.58 * 1.3) + 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: Math.round(root.collapsedHeight * 0.66)
+                    url: compactMedia.visible ? compactMedia.player.art_url : ""
+                }
+                Text {
+                    anchors.left: compactCover.right
+                    anchors.leftMargin: 8
+                    anchors.right: compactPause.left
+                    anchors.rightMargin: root.notch.sessions.count > 0 ? 48 : 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    textFormat: Text.StyledText
+                    text: `<b>${compactMedia.player.title.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</b>`
+                          + (compactMedia.player.artist ? `<font color="#8b909a">  ${compactMedia.player.artist.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</font>` : "")
+                    color: "#f2f3f5"
+                    font.pixelSize: Math.min(12, Math.round(root.collapsedHeight * 0.42))
+                }
+                MediaCard.MediaButton {
+                    id: compactPause
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: Math.min(26, root.collapsedHeight - 4)
+                    kind: compactMedia.player.playing ? "pause" : "play"
+                    hint: compactMedia.player.playing ? qsTr("Pause") : qsTr("Play")
+                    onClicked: root.bridge.mediaCommand(compactMedia.player.bus_name, "play_pause")
+                }
+            }
+
             Text {
                 anchors.centerIn: parent
-                visible: root.settings.showClock && !root.levelShown
+                visible: root.settings.showClock && !root.levelShown && !root.mediaShown
                 text: root.notch.time
                 color: "#f2f3f5"
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
@@ -295,15 +339,16 @@ Window {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                visible: !root.levelShown && root.notch.sessions.count === 0 && root.notch.media !== null
-                         && root.notch.media.playing
+                visible: !root.levelShown && !root.mediaShown && root.notch.sessions.count === 0
+                         && root.notch.media !== null && root.notch.media.playing
                 size: Math.round(root.collapsedHeight * 0.62)
                 url: visible ? root.notch.media.art_url : ""
             }
 
             Row {
                 anchors.right: parent.right
-                anchors.rightMargin: 12
+                // Left of the pause button while a song is shown
+                anchors.rightMargin: root.mediaShown ? 40 : 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
                 visible: !root.levelShown && root.notch.sessions.count > 0

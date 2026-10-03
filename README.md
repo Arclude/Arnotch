@@ -144,8 +144,10 @@ are handled. The address is a secret: it is never logged.
 ## Media
 
 The *Activity* tab shows what's playing, with its cover and previous, play/pause and next
-buttons; while music plays, the closed island shows the cover. It works with every player that
+buttons. It works with every player that
 supports MPRIS (Spotify, Firefox, Chromium, VLC, mpv, ...) and follows the one that started last.
+While a song plays (and for half a minute after pausing it), the closed island shows its title
+and artist with a play/pause button instead of the clock; *Music* in the settings turns that off.
 
 ## Performance
 
