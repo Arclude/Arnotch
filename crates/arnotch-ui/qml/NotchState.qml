@@ -57,6 +57,11 @@ QtObject {
     // Limit warnings already given, by window reset time and threshold
     property var limitWarned: ({})
 
+    // The phone (KDE Connect) in reach: { device, percent, charging }, null when none
+    property var phone: null
+    // Main binds this to the setting.
+    property bool phoneAlerts: true
+
     // Meetings in the next 24 hours: [{ title, start, end, link }] (Unix seconds)
     property var meetings: []
     // Milliseconds since the epoch, updated once a minute with the clock
@@ -151,6 +156,8 @@ QtObject {
                 showLevel(ev.kind, ev.value, ev.muted)
         } else if (ev.type === "battery") {
             handleBattery(ev.battery)
+        } else if (ev.type === "phone") {
+            handlePhone(ev)
         } else if (ev.type === "usage") {
             handleUsage(ev)
         } else if (ev.type === "calendar") {
@@ -344,6 +351,37 @@ QtObject {
         chat.revision++
         if (ev.state === "done" || ev.state === "failed")
             chatFinished(ev.state, chat.get(last).body)
+    }
+
+    function handlePhone(ev) {
+        if (ev.kind === "battery") {
+            const before = phone
+            phone = { device: ev.device, percent: ev.percent, charging: ev.charging }
+            if (phoneAlerts && before && !ev.charging && ev.percent <= 15 && before.percent > 15) {
+                say(qsTr("%1: battery low").arg(ev.device), qsTr("%1% left").arg(ev.percent), 8000)
+                notifying = true
+            }
+            return
+        }
+        if (ev.kind === "gone") {
+            phone = null
+            return
+        }
+        if (!phoneAlerts)
+            return
+        if (ev.kind === "call") {
+            const who = ev.contact || ev.number || qsTr("Unknown number")
+            if (ev.state === "ringing")
+                say(qsTr("📞 Calling: %1").arg(who), ev.device, 30000)
+            else if (ev.state === "missed_call")
+                say(qsTr("Missed call: %1").arg(who), ev.device, 15000)
+            else
+                return // talking: the ringing note just goes away
+            notifying = true
+        } else if (ev.kind === "message") {
+            say(qsTr("💬 %1").arg(ev.from || qsTr("Message")), ev.body, 10000)
+            notifying = true
+        }
     }
 
     function handleUsage(ev) {

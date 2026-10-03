@@ -29,6 +29,8 @@ QtObject {
         property bool liveActivity: true
         // Show volume, brightness and battery changes in the island
         property bool indicators: true
+        // Calls, messages and the battery of the phone (KDE Connect)
+        property bool phone: true
         // Chat: let Claude search the web, and read files on this computer (read-only)
         property bool chatWeb: true
         property bool chatFiles: false
@@ -41,6 +43,7 @@ QtObject {
 
     property NotchState state: NotchState {
         indicators: app.settings.indicators
+        phoneAlerts: app.settings.phone
         // The shelf survives restarts.
         Component.onCompleted: {
             try {

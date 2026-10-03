@@ -170,6 +170,13 @@ ApplicationWindow {
                 }
             }
 
+            Label { text: qsTr("Phone") }
+            Switch {
+                text: qsTr("Calls, messages and battery (KDE Connect)")
+                checked: win.settings.phone
+                onToggled: win.settings.phone = checked
+            }
+
             Label { text: qsTr("Music") }
             Switch {
                 text: qsTr("Show the playing song in the closed island")

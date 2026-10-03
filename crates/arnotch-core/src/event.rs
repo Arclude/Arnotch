@@ -97,6 +97,9 @@ pub enum Event {
     /// A Claude Code session's cost and context use, with the account's rate limits;
     /// sent by `arnotchctl statusline` from Claude Code's status line input.
     Usage(crate::claude::Usage),
+    /// The phone (KDE Connect): battery, calls, text messages; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Phone(crate::phone::PhoneEvent),
     /// Meetings coming up in the next 24 hours; published by the notch itself.
     #[serde(skip_deserializing)]
     Calendar {

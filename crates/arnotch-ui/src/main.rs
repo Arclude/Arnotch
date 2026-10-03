@@ -42,6 +42,17 @@ fn main() -> anyhow::Result<()> {
         .spawn(move || watch_calendar(urls))?;
 
     std::thread::Builder::new()
+        .name("notch-phone".into())
+        .spawn(|| {
+            let events = bridge::event_bus();
+            if let Err(err) =
+                arnotch_core::phone::watch(|event| _ = events.send(Event::Phone(event)))
+            {
+                tracing::info!("no phone (KDE Connect): {err:#}");
+            }
+        })?;
+
+    std::thread::Builder::new()
         .name("notch-clipboard".into())
         .spawn(|| {
             if let Err(err) = arnotch_core::clipboard::watch_history(bridge::publish_clipboard) {

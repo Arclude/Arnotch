@@ -12,6 +12,7 @@ pub mod focus;
 pub mod i18n;
 pub mod ipc;
 pub mod media;
+pub mod phone;
 pub mod share;
 pub mod system;
 pub mod terminals;

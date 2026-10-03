@@ -148,6 +148,13 @@ level bar, and plugging in the charger shows the battery's charge. A battery tha
 PipeWire), brightness from KDE's screen brightness service and the battery from UPower; all
 three are event driven. Turn them off in the settings (*Indicators*).
 
+## Phone
+
+With [KDE Connect](https://kdeconnect.kde.org/) paired, the island announces incoming and missed
+calls and new text messages, and the *Activity* tab shows the phone's battery (with a warning
+below 15%). Messages synced from the phone's history when it connects are not announced. *Phone*
+in the settings turns it off.
+
 ## Calendar
 
 Paste your calendar's secret iCalendar address in the settings (*Calendar*): in Google Calendar,
