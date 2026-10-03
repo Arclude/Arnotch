@@ -226,8 +226,10 @@ Window {
         border.width: 1
         clip: true
 
-        Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.9 } }
-        Behavior on height { NumberAnimation { duration: 380; easing.type: Easing.OutBack; easing.overshoot: 0.9 } }
+        // A real spring: it settles in about 300 ms with a ~5% overshoot (which the window's
+        // shadow margin has room for), and a change of mind mid-way keeps its momentum.
+        Behavior on width { SpringAnimation { spring: 6; damping: 0.38; epsilon: 0.5 } }
+        Behavior on height { SpringAnimation { spring: 6; damping: 0.38; epsilon: 0.5 } }
         Behavior on bottomLeftRadius { NumberAnimation { duration: 300 } }
 
         HoverHandler {
