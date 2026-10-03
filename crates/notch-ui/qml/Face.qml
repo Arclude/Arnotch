@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Shapes
 
 // The notch mascot. `mood` drives the eyes: idle | working | waiting | happy.
-// Animations only run while the face is visible, so hidden faces cost nothing.
+// Animations only run while the face is visible, so hidden faces cost nothing, and
+// only while something moves: timers start each short move, so pauses draw no frames.
 Item {
     id: face
 
@@ -32,8 +33,11 @@ Item {
 
             property real lookX: 0
 
+            Behavior on lookX { NumberAnimation { duration: 420; easing.type: Easing.InOutQuad } }
+
             anchors.centerIn: parent
-            anchors.horizontalCenterOffset: lookX * face.size * 0.13
+            // Whole pixels: a small face would otherwise redraw for every fraction of one.
+            anchors.horizontalCenterOffset: Math.round(lookX * face.size * 0.13)
             anchors.verticalCenterOffset: face.mood === "waiting" ? -face.size * 0.04 : 0
             width: face.size * 0.62
             height: face.size * 0.32
@@ -121,22 +125,26 @@ Item {
     }
 
     // Glance left and right while working
-    SequentialAnimation {
+    Timer {
         running: face.visible && face.mood === "working"
-        loops: Animation.Infinite
-        NumberAnimation { target: eyes; property: "lookX"; to: -1; duration: 380; easing.type: Easing.InOutQuad }
-        PauseAnimation { duration: 450 }
-        NumberAnimation { target: eyes; property: "lookX"; to: 1; duration: 520; easing.type: Easing.InOutQuad }
-        PauseAnimation { duration: 450 }
+        repeat: true
+        triggeredOnStart: true
+        interval: 1300
+        onTriggered: eyes.lookX = eyes.lookX < 0 ? 1 : -1
     }
 
     // Hop to get attention while waiting for the user
-    SequentialAnimation {
+    Timer {
         running: face.visible && face.mood === "waiting"
-        loops: Animation.Infinite
+        repeat: true
+        interval: 1840
+        onTriggered: hop.restart()
+        onRunningChanged: if (!running) hop.stop()
+    }
+    SequentialAnimation {
+        id: hop
         onStopped: bob.y = 0
-        NumberAnimation { target: bob; property: "y"; to: -face.size * 0.12; duration: 180; easing.type: Easing.OutQuad }
+        NumberAnimation { target: bob; property: "y"; to: -Math.round(face.size * 0.12); duration: 180; easing.type: Easing.OutQuad }
         NumberAnimation { target: bob; property: "y"; to: 0; duration: 260; easing.type: Easing.OutBounce }
-        PauseAnimation { duration: 1400 }
     }
 }

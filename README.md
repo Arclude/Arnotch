@@ -105,11 +105,20 @@ Drag files onto the island and drop them on one of its targets:
 
 `notchctl shelf <file>...` and `notchctl share <file>` do the same from a terminal.
 
+## Chat
+
+The *Chat* tab talks to Claude without opening a terminal. Each message runs the Claude Code
+CLI in print mode (`claude -p`), so it uses your Claude Code login and needs no API key; the
+conversation continues until you start a new one (+). It is a plain chat: no tools, no MCP
+servers and none of your Claude Code settings or hooks. The answer is streamed as it is
+written; ■ stops it. Set `NOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
+
 ## Performance
 
 The island uses Qt's software renderer by default: for a surface this small it needs about half
-the memory of a GPU context (≈22 MB PSS) and stays around 0.1% CPU when idle. Animations only run
-while they are visible. Set `NOTCH_RENDERER=gpu` to use the GPU instead.
+the memory of a GPU context (≈28 MB PSS). It uses about 0.2% CPU when idle and 0.35% while an
+agent works: animations only draw frames while something moves, and only while they are visible.
+Set `NOTCH_RENDERER=gpu` to use the GPU instead.
 
 ## Claude Code integration
 
