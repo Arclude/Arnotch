@@ -11,7 +11,7 @@ use cxx_qt_lib::QString;
 use notch_core::event::{ChatState, UploadState};
 use notch_core::i18n::{self, tr};
 use notch_core::terminals::{self, Terminal};
-use notch_core::{Decision, Event, chat, clipboard, control, focus, ipc, share};
+use notch_core::{Decision, Event, chat, clipboard, control, focus, ipc, media, share};
 use tokio::sync::broadcast;
 
 #[cxx_qt::bridge]
@@ -86,6 +86,11 @@ pub mod qobject {
         #[cxx_name = "stopChat"]
         fn stop_chat(self: &NotchBridge);
 
+        /// Sends "play_pause", "next" or "previous" to a media player.
+        #[qinvokable]
+        #[cxx_name = "mediaCommand"]
+        fn media_command(self: &NotchBridge, bus_name: &QString, command: &QString);
+
         /// Starts a new conversation; Claude forgets the previous one.
         #[qinvokable]
         #[cxx_name = "newChat"]
@@ -135,6 +140,15 @@ fn with_chat<T>(f: impl FnOnce(&mut Chat) -> T) -> T {
         turn: 0,
         pid: None,
     }))
+}
+
+/// What's playing, replayed to bridges created after it was published.
+static MEDIA: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_media(player: Option<media::Player>) {
+    let event = Event::Media { player };
+    *MEDIA.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
 }
 
 fn emit(bridge: Pin<&mut qobject::NotchBridge>, event: &Event) {
@@ -335,6 +349,20 @@ impl qobject::NotchBridge {
         turn
     }
 
+    pub fn media_command(&self, bus_name: &QString, command: &QString) {
+        let command = match command.to_string().as_str() {
+            "next" => media::Command::Next,
+            "previous" => media::Command::Previous,
+            _ => media::Command::PlayPause,
+        };
+        let bus_name = bus_name.to_string();
+        std::thread::spawn(move || {
+            if let Err(err) = media::command(&bus_name, command) {
+                tracing::warn!("media command for {bus_name}: {err:#}");
+            }
+        });
+    }
+
     pub fn stop_chat(&self) {
         with_chat(|chat| {
             if let Some(pid) = chat.pid.take() {
@@ -387,7 +415,11 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
         let qt_thread = self.qt_thread();
 
         // Queued: QML connects its handlers only after this object is initialized.
-        if let Some(event) = TERMINALS.lock().unwrap().clone() {
+        let replay = [
+            TERMINALS.lock().unwrap().clone(),
+            MEDIA.lock().unwrap().clone(),
+        ];
+        for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));
         }
 

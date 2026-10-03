@@ -40,6 +40,21 @@ QtObject {
         }
         onShelfChanged: app.settings.shelf = JSON.stringify(shelf)
 
+        // An answer that finished while nobody looks at the chat gets a short note.
+        onChatFinished: (status, body) => {
+            for (let i = 0; i < app.islands.count; i++) {
+                const island = app.islands.objectAt(i)
+                if (island.expanded && island.shownTab === "chat")
+                    return
+            }
+            const firstLine = body.split("\n").find(line => line.trim() !== "") ?? ""
+            if (status === "done")
+                app.state.say(qsTr("Claude answered"), firstLine.replace(/[*_`#>]/g, "").trim(), 6000)
+            else
+                app.state.say(qsTr("Claude couldn't answer"), firstLine, 8000)
+            app.state.notifying = true
+        }
+
         onPermissionRequested: requestId => {
             if (!app.settings.permissionPrompts) {
                 app.bridge.answerPermission(requestId, "ask")
@@ -57,6 +72,8 @@ QtObject {
                 app.openSettings()
             else if (ev.type === "open")
                 app.openIslands(ev.tab)
+            else if (ev.type === "toggle")
+                app.toggleIslands(ev.tab)
             else if (ev.type === "close")
                 app.closeIslands()
             else if (ev.type === "shelve")
@@ -102,6 +119,17 @@ QtObject {
                 island.tab = tab
             island.opened = true
         }
+    }
+
+    function toggleIslands(tab) {
+        for (let i = 0; i < islands.count; i++) {
+            const island = islands.objectAt(i)
+            if (island.opened && (!tab || island.tab === tab)) {
+                closeIslands()
+                return
+            }
+        }
+        openIslands(tab)
     }
 
     function closeIslands() {

@@ -1,7 +1,8 @@
 //! Command line client for the notch.
 //!
 //!   notchctl notify <title> [body]   show a message
-//!   notchctl open [tab]              open the island (tabs: activity, terminals)
+//!   notchctl open [tab]              open the island (tabs: activity, chat, terminals, shelf)
+//!   notchctl toggle [tab]            open the island on a tab, or close it if it shows that tab
 //!   notchctl close                   close the island
 //!   notchctl shelf <file>...         put files on the shelf
 //!   notchctl share <file>            upload a file and copy its link
@@ -20,7 +21,8 @@ use notch_core::{AgentPhase, Event, claude, ipc};
 
 const USAGE: &str = "usage:
   notchctl notify <title> [body]
-  notchctl open [activity|terminals]
+  notchctl open [activity|chat|terminals|shelf]
+  notchctl toggle [activity|chat|terminals|shelf]
   notchctl close
   notchctl shelf <file>...
   notchctl share <file>
@@ -40,6 +42,9 @@ fn main() -> ExitCode {
             body: rest.join(" "),
         }),
         ["open", rest @ ..] if rest.len() <= 1 => send(&Event::Open {
+            tab: rest.first().map(|tab| (*tab).to_owned()),
+        }),
+        ["toggle", rest @ ..] if rest.len() <= 1 => send(&Event::Toggle {
             tab: rest.first().map(|tab| (*tab).to_owned()),
         }),
         ["close"] => send(&Event::Close),

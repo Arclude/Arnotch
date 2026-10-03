@@ -39,6 +39,9 @@ QtObject {
                         .sort((a, b) => rank(a) - rank(b))
     }
 
+    // What's playing (see MediaCard), null when no player has a track.
+    property var media: null
+
     // Paths of the files kept on the shelf; Main persists them.
     property var shelf: []
     // Files being shared: [{ id, file, progress, state }]
@@ -64,6 +67,8 @@ QtObject {
 
     // Claude asked for permission; Main switches the islands to the activity tab.
     signal permissionRequested(string requestId)
+    // Claude finished answering in the chat ("done" or "failed"), with the answer or error.
+    signal chatFinished(string status, string body)
 
     // True while a new event wants the islands to open on their own.
     readonly property bool alerting: alertTimer.running
@@ -103,6 +108,8 @@ QtObject {
             notifying = true
         } else if (ev.type === "upload") {
             handleUpload(ev)
+        } else if (ev.type === "media") {
+            media = ev.player ?? null
         } else if (ev.type === "chat") {
             handleChat(ev)
         } else if (ev.type === "permission_closed") {
@@ -267,6 +274,8 @@ QtObject {
                 chat.setProperty(last, "body", ev.text)
         }
         chat.revision++
+        if (ev.state === "done" || ev.state === "failed")
+            chatFinished(ev.state, chat.get(last).body)
     }
 
     function addToShelf(paths) {

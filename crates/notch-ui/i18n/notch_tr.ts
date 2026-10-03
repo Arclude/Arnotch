@@ -77,37 +77,37 @@
         <translation>Kısa cevaplar, araç yok. Claude Code girişini kullanır.</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="104"/>
+        <location filename="../qml/ChatView.qml" line="130"/>
         <source>Couldn&apos;t get an answer: %1</source>
         <translation>Cevap alınamadı: %1</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="106"/>
+        <location filename="../qml/ChatView.qml" line="132"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="106"/>
+        <location filename="../qml/ChatView.qml" line="132"/>
         <source>(stopped)</source>
         <translation>(durduruldu)</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="122"/>
+        <location filename="../qml/ChatView.qml" line="162"/>
         <source>Reply to Claude…</source>
         <translation>Claude&apos;a cevap yaz…</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="122"/>
+        <location filename="../qml/ChatView.qml" line="162"/>
         <source>Ask Claude…</source>
         <translation>Claude&apos;a sor…</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="135"/>
+        <location filename="../qml/ChatView.qml" line="175"/>
         <source>Stop</source>
         <translation>Durdur</translation>
     </message>
     <message>
-        <location filename="../qml/ChatView.qml" line="142"/>
+        <location filename="../qml/ChatView.qml" line="182"/>
         <source>New chat</source>
         <translation>Yeni sohbet</translation>
     </message>
@@ -148,27 +148,27 @@
 <context>
     <name>Island</name>
     <message>
-        <location filename="../qml/Island.qml" line="315"/>
+        <location filename="../qml/Island.qml" line="334"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="316"/>
+        <location filename="../qml/Island.qml" line="335"/>
         <source>Chat</source>
         <translation>Sohbet</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="317"/>
+        <location filename="../qml/Island.qml" line="336"/>
         <source>Terminals</source>
         <translation>Terminaller</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="318"/>
+        <location filename="../qml/Island.qml" line="337"/>
         <source>Shelf</source>
         <translation>Raf</translation>
     </message>
     <message>
-        <location filename="../qml/Island.qml" line="371"/>
+        <location filename="../qml/Island.qml" line="390"/>
         <source>Uploading %1</source>
         <translation>%1 yükleniyor</translation>
     </message>
@@ -176,29 +176,62 @@
 <context>
     <name>Main</name>
     <message>
-        <location filename="../qml/Main.qml" line="133"/>
+        <location filename="../qml/Main.qml" line="52"/>
+        <source>Claude answered</source>
+        <translation>Claude cevapladı</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="54"/>
+        <source>Claude couldn&apos;t answer</source>
+        <translation>Claude cevap veremedi</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="161"/>
         <source>Settings…</source>
         <translation>Ayarlar…</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="137"/>
+        <location filename="../qml/Main.qml" line="165"/>
         <source>Send a test notification</source>
         <translation>Deneme bildirimi gönder</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="138"/>
+        <location filename="../qml/Main.qml" line="166"/>
         <source>Hello!</source>
         <translation>Merhaba!</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="138"/>
+        <location filename="../qml/Main.qml" line="166"/>
         <source>The notch is working</source>
         <translation>Notch çalışıyor</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="142"/>
+        <location filename="../qml/Main.qml" line="170"/>
         <source>Quit</source>
         <translation>Çık</translation>
+    </message>
+</context>
+<context>
+    <name>MediaCard</name>
+    <message>
+        <location filename="../qml/MediaCard.qml" line="54"/>
+        <source>Previous</source>
+        <translation>Önceki</translation>
+    </message>
+    <message>
+        <location filename="../qml/MediaCard.qml" line="63"/>
+        <source>Pause</source>
+        <translation>Duraklat</translation>
+    </message>
+    <message>
+        <location filename="../qml/MediaCard.qml" line="63"/>
+        <source>Play</source>
+        <translation>Oynat</translation>
+    </message>
+    <message>
+        <location filename="../qml/MediaCard.qml" line="69"/>
+        <source>Next</source>
+        <translation>Sonraki</translation>
     </message>
 </context>
 <context>
@@ -209,32 +242,32 @@
         <translation>Her şey sakin</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="151"/>
+        <location filename="../qml/NotchState.qml" line="165"/>
         <source>Finished</source>
         <translation>Bitti</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="153"/>
+        <location filename="../qml/NotchState.qml" line="167"/>
         <source>Needs your attention</source>
         <translation>Seni bekliyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="155"/>
+        <location filename="../qml/NotchState.qml" line="169"/>
         <source>Wants to run %1</source>
         <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="159"/>
+        <location filename="../qml/NotchState.qml" line="173"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="227"/>
+        <location filename="../qml/NotchState.qml" line="241"/>
         <source>Link copied</source>
         <translation>Link kopyalandı</translation>
     </message>
     <message>
-        <location filename="../qml/NotchState.qml" line="229"/>
+        <location filename="../qml/NotchState.qml" line="243"/>
         <source>Couldn&apos;t share %1</source>
         <translation>%1 paylaşılamadı</translation>
     </message>

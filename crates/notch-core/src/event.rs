@@ -30,6 +30,12 @@ pub enum Event {
         #[serde(default)]
         tab: Option<String>,
     },
+    /// Open the island on a tab, or close it if it already shows that tab
+    /// (for a keyboard shortcut).
+    Toggle {
+        #[serde(default)]
+        tab: Option<String>,
+    },
     /// Close the island.
     Close,
     /// Put files (absolute paths) on the shelf.
@@ -64,6 +70,11 @@ pub enum Event {
         /// The next piece of the answer (`streaming`), or what went wrong (`failed`).
         #[serde(skip_serializing_if = "String::is_empty")]
         text: String,
+    },
+    /// What's playing, `None` when no player has a track; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Media {
+        player: Option<crate::media::Player>,
     },
     /// A permission request was answered or abandoned; published by the notch itself.
     #[serde(skip_deserializing)]

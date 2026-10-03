@@ -277,6 +277,16 @@ Window {
                 font.features: { "tnum": 1 }
             }
 
+            // Music playing and no agent at work: its cover. Static, so it costs nothing.
+            MediaCard.Cover {
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.notch.sessions.count === 0 && root.notch.media !== null && root.notch.media.playing
+                size: Math.round(root.collapsedHeight * 0.62)
+                url: visible ? root.notch.media.art_url : ""
+            }
+
             Row {
                 anchors.right: parent.right
                 anchors.rightMargin: 12
@@ -507,6 +517,14 @@ Window {
                         font.pixelSize: 12
                     }
                 }
+            }
+
+            MediaCard {
+                width: parent.width
+                visible: root.onActivity && !root.showCard && root.notch.media !== null
+                player: root.notch.media ?? ({ bus_name: "", identity: "", title: "", artist: "", art_url: "",
+                                               playing: false, can_go_next: false, can_go_previous: false })
+                bridge: root.bridge
             }
 
             Column {

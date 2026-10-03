@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use notch_core::terminals::{Finished, Scanner};
-use notch_core::{Event, i18n, ipc};
+use notch_core::{Event, i18n, ipc, media};
 use tracing_subscriber::EnvFilter;
 
 fn main() -> anyhow::Result<()> {
@@ -31,6 +31,14 @@ fn main() -> anyhow::Result<()> {
     std::thread::Builder::new()
         .name("notch-terminals".into())
         .spawn(watch_terminals)?;
+
+    std::thread::Builder::new()
+        .name("notch-media".into())
+        .spawn(|| {
+            if let Err(err) = media::watch(bridge::publish_media) {
+                tracing::warn!("cannot follow media players: {err:#}");
+            }
+        })?;
 
     let mut app = app::ffi::new_app();
     let mut engine = QQmlApplicationEngine::new();

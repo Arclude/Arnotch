@@ -10,6 +10,7 @@ pub mod event;
 pub mod focus;
 pub mod i18n;
 pub mod ipc;
+pub mod media;
 pub mod share;
 pub mod terminals;
 

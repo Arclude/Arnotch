@@ -40,7 +40,8 @@ and on X11. GNOME does not support layer-shell yet.
 cargo build --release
 ./target/release/notch &
 ./target/release/notchctl notify "Hello" "from the notch"
-./target/release/notchctl open terminals   # or: open activity, close
+./target/release/notchctl open terminals   # or: open activity|chat|shelf, close
+./target/release/notchctl toggle chat      # open on a tab, or close it (for shortcuts)
 ./target/release/notchctl settings
 ./target/release/notchctl terminals        # list open terminals as JSON
 ```
@@ -113,10 +114,21 @@ conversation continues until you start a new one (+). It is a plain chat: no too
 servers and none of your Claude Code settings or hooks. The answer is streamed as it is
 written; ■ stops it. Set `NOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
 
+On KDE Plasma, `contrib/install.sh` binds **Meta+Space** to open and close the chat (a custom
+shortcut named *Notch: Chat*, which you can change in System Settings › Shortcuts). Elsewhere,
+bind `notchctl toggle chat` to a key. An answer that finishes while the chat is closed shows up
+as a short note in the island.
+
+## Media
+
+The *Activity* tab shows what's playing, with its cover and previous, play/pause and next
+buttons; while music plays, the closed island shows the cover. It works with every player that
+supports MPRIS (Spotify, Firefox, Chromium, VLC, mpv, ...) and follows the one that started last.
+
 ## Performance
 
 The island uses Qt's software renderer by default: for a surface this small it needs about half
-the memory of a GPU context (≈28 MB PSS). It uses about 0.2% CPU when idle and 0.35% while an
+the memory of a GPU context (≈35 MB PSS). It uses about 0.2% CPU when idle and 0.35% while an
 agent works: animations only draw frames while something moves, and only while they are visible.
 Set `NOTCH_RENDERER=gpu` to use the GPU instead.
 

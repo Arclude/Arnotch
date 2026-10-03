@@ -17,6 +17,7 @@ anyhow = "1"
 libc = "0.2"
 similar = "3"
 tracing = "0.1"
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 cxx = "1"
 cxx-qt = "0.10"

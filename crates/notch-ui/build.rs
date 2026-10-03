@@ -23,6 +23,7 @@ fn main() {
         "qml/DropTargets.qml",
         "qml/ShelfView.qml",
         "qml/ChatView.qml",
+        "qml/MediaCard.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")
