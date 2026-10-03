@@ -1,4 +1,4 @@
-# linux-ai — notch
+# linux-ai — arnotch
 
 A Dynamic-Island-style assistant for the Linux desktop. A small island with a robot face
 lives at the top center of the screen, and it expands to show what your coding agents
@@ -10,12 +10,12 @@ lives at the top center of the screen, and it expands to show what your coding a
 
 ```
 crates/
-  notch-core/   event protocol, Unix socket IPC, Claude Code hook adapter
-  notch-ui/     the island: Rust (cxx-qt) + QML, placed with wlr-layer-shell, tray icon, settings
-  notchctl/     CLI that sends events to the island (used by hooks and scripts)
+  arnotch-core/   event protocol, Unix socket IPC, Claude Code hook adapter
+  arnotch-ui/     the island: Rust (cxx-qt) + QML, placed with wlr-layer-shell, tray icon, settings
+  arnotchctl/     CLI that sends events to the island (used by hooks and scripts)
 ```
 
-Clients write newline-delimited JSON events to `$XDG_RUNTIME_DIR/notch.sock`:
+Clients write newline-delimited JSON events to `$XDG_RUNTIME_DIR/arnotch.sock`:
 
 ```json
 {"type":"notify","title":"Backup","body":"Finished in 42s"}
@@ -38,12 +38,12 @@ and on X11. GNOME does not support layer-shell yet.
 
 ```sh
 cargo build --release
-./target/release/notch &
-./target/release/notchctl notify "Hello" "from the notch"
-./target/release/notchctl open terminals   # or: open activity|chat|shelf, close
-./target/release/notchctl toggle chat      # open on a tab, or close it (for shortcuts)
-./target/release/notchctl settings
-./target/release/notchctl terminals        # list open terminals as JSON
+./target/release/arnotch &
+./target/release/arnotchctl notify "Hello" "from arnotch"
+./target/release/arnotchctl open terminals   # or: open activity|chat|shelf, close
+./target/release/arnotchctl toggle chat      # open on a tab, or close it (for shortcuts)
+./target/release/arnotchctl settings
+./target/release/arnotchctl terminals        # list open terminals as JSON
 ```
 
 ## Install
@@ -54,9 +54,10 @@ contrib/install.sh --hooks  # also add the Claude Code hooks to ~/.claude/settin
 contrib/install.sh --uninstall
 ```
 
-notch runs as the systemd user service `notch.service`, tied to the graphical session and
-restarted if it crashes. Its log: `journalctl --user -u notch`. Run the script again after
-pulling changes to update.
+arnotch runs as the systemd user service `arnotch.service`, tied to the graphical session and
+restarted if it crashes. Its log: `journalctl --user -u arnotch`. Run the script again after
+pulling changes to update. Coming from an older version called *notch*, it moves the service,
+the Claude Code hooks and the chat shortcut over, and arnotch copies your settings and shelf.
 
 ## Terminals
 
@@ -76,7 +77,7 @@ so they need a supported terminal:
 | Konsole | Settings › Configure Konsole › General › *Enable the security sensitive parts of the DBus API* |
 | tmux | none |
 | WezTerm | none (`wezterm cli`) |
-| kitty | `allow_remote_control yes` and `listen_on unix:@kitty-{kitty_pid}` in `kitty.conf` (or set `NOTCH_KITTY_SOCKET`) |
+| kitty | `allow_remote_control yes` and `listen_on unix:@kitty-{kitty_pid}` in `kitty.conf` (or set `ARNOTCH_KITTY_SOCKET`) |
 | Arterm | a version with the control socket (`$XDG_RUNTIME_DIR/arterm/control-<pid>.sock`) |
 
 When Claude waits for you, the activity card offers *Reply to Claude*, which types your message
@@ -84,7 +85,7 @@ into the terminal running that Claude session.
 
 ## Settings
 
-Open them from the tray icon (or `notchctl settings`). Stored in `~/.config/notch/notch.conf`.
+Open them from the tray icon (or `arnotchctl settings`). Stored in `~/.config/arnotch/arnotch.conf`.
 
 - **Show on**: the active screen (follows focus), all screens, or one specific monitor.
 - **Top panel**: on a screen with a top panel, the island can sit *over* the panel (covering
@@ -104,7 +105,7 @@ Drag files onto the island and drop them on one of its targets:
   pick a service in the settings (0x0.st, catbox.moe, litterbox for 24 hours, or your own
   command, where `{file}` is the quoted path and the last line printed is the link).
 
-`notchctl shelf <file>...` and `notchctl share <file>` do the same from a terminal.
+`arnotchctl shelf <file>...` and `arnotchctl share <file>` do the same from a terminal.
 
 ## Chat
 
@@ -112,11 +113,11 @@ The *Chat* tab talks to Claude without opening a terminal. Each message runs the
 CLI in print mode (`claude -p`), so it uses your Claude Code login and needs no API key; the
 conversation continues until you start a new one (+). It is a plain chat: no tools, no MCP
 servers and none of your Claude Code settings or hooks. The answer is streamed as it is
-written; ■ stops it. Set `NOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
+written; ■ stops it. Set `ARNOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
 
 On KDE Plasma, `contrib/install.sh` binds **Meta+Space** to open and close the chat (a custom
-shortcut named *Notch: Chat*, which you can change in System Settings › Shortcuts). Elsewhere,
-bind `notchctl toggle chat` to a key. An answer that finishes while the chat is closed shows up
+shortcut named *arnotch: Chat*, which you can change in System Settings › Shortcuts). Elsewhere,
+bind `arnotchctl toggle chat` to a key. An answer that finishes while the chat is closed shows up
 as a short note in the island.
 
 ## Media
@@ -130,19 +131,19 @@ supports MPRIS (Spotify, Firefox, Chromium, VLC, mpv, ...) and follows the one t
 The island uses Qt's software renderer by default: for a surface this small it needs about half
 the memory of a GPU context (≈35 MB PSS). It uses about 0.2% CPU when idle and 0.35% while an
 agent works: animations only draw frames while something moves, and only while they are visible.
-Set `NOTCH_RENDERER=gpu` to use the GPU instead.
+Set `ARNOTCH_RENDERER=gpu` to use the GPU instead.
 
 ## Claude Code integration
 
-Run `contrib/install.sh --hooks`, or put `notchctl` on your `PATH` and merge [`contrib/claude-code-hooks.json`](contrib/claude-code-hooks.json)
+Run `contrib/install.sh --hooks`, or put `arnotchctl` on your `PATH` and merge [`contrib/claude-code-hooks.json`](contrib/claude-code-hooks.json)
 into `~/.claude/settings.json`. Every Claude Code session will then show up in the island,
 with its recent steps, a live diff of each file edit and the output of commands such as test runs.
-The hook takes about 1 ms and never fails or blocks, even when the notch is not running.
+The hook takes about 1 ms and never fails or blocks, even when arnotch is not running.
 
 When Claude asks for permission, the island shows the command or diff with **Allow**, **Deny** and
-**Ask in terminal** buttons. `notchctl answer allow|deny|ask` answers the latest request, which is
-handy on a global shortcut. Without an answer within 45 seconds (`NOTCH_PERMISSION_TIMEOUT`), or
-when the notch is not running, Claude Code simply asks in the terminal as usual.
+**Ask in terminal** buttons. `arnotchctl answer allow|deny|ask` answers the latest request, which is
+handy on a global shortcut. Without an answer within 45 seconds (`ARNOTCH_PERMISSION_TIMEOUT`), or
+when arnotch is not running, Claude Code simply asks in the terminal as usual.
 
 ## License
 

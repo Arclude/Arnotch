@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/notch-core", "crates/notch-ui", "crates/notchctl"]
+members = ["crates/arnotch-core", "crates/arnotch-ui", "crates/arnotchctl"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,7 +9,7 @@ license = "MIT"
 repository = "https://github.com/toygar-m/linux-ai"
 
 [workspace.dependencies]
-notch-core = { path = "crates/notch-core" }
+arnotch-core = { path = "crates/arnotch-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "net", "io-util", "macros", "sync", "fs"] }

@@ -1,0 +1,24 @@
+[package]
+name = "arnotch-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "arnotch"
+path = "src/main.rs"
+
+[dependencies]
+arnotch-core.workspace = true
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+qt-build-utils = "0.10"

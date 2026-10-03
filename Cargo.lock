@@ -24,6 +24,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "arnotch-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "serde",
+ "serde_json",
+ "similar",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
+name = "arnotch-ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arnotch-core",
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "qt-build-utils",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "arnotchctl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arnotch-core",
+ "serde_json",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -715,46 +755,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys",
-]
-
-[[package]]
-name = "notch-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "libc",
- "serde",
- "serde_json",
- "similar",
- "tokio",
- "tracing",
- "zbus",
-]
-
-[[package]]
-name = "notch-ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cxx",
- "cxx-qt",
- "cxx-qt-build",
- "cxx-qt-lib",
- "notch-core",
- "qt-build-utils",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "notchctl"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "notch-core",
- "serde_json",
 ]
 
 [[package]]
