@@ -269,7 +269,7 @@ Window {
         Spring {
             id: widthSpring
             target: root.expanded ? root.expandedWidth : root.levelShown ? 310
-                  : root.mediaShown ? (root.notch.sessions.count > 0 ? 420 : 380) + (root.notch.timer ? 60 : 0)
+                  : root.mediaShown ? compactMedia.fitWidth
                   : root.collapsedWidth
         }
         Spring {
@@ -334,6 +334,17 @@ Window {
                 visible: root.mediaShown
 
                 readonly property var player: root.notch.media ?? ({ title: "", artist: "", art_url: "", playing: false, bus_name: "" })
+                // Just wide enough for the song (a short one leaves no gap), at most as wide
+                // as a long one gets: then it is cut short.
+                readonly property real fitWidth: {
+                    const sessions = root.notch.sessions.count > 0
+                    const left = compactCover.anchors.leftMargin + compactCover.size + 8
+                    const right = compactCountdown.visible
+                        ? compactCountdown.implicitWidth + 10 + (sessions ? 86 : 40)
+                        : 6 + compactPause.size + (sessions ? 48 : 8)
+                    const most = (sessions ? 420 : 380) + (root.notch.timer ? 60 : 0)
+                    return Math.round(Math.max(root.collapsedWidth + 60, Math.min(most, left + compactTitle.implicitWidth + 4 + right)))
+                }
 
                 MediaCard.Cover {
                     id: compactCover
@@ -344,6 +355,7 @@ Window {
                     url: compactMedia.visible ? compactMedia.player.art_url : ""
                 }
                 Text {
+                    id: compactTitle
                     anchors.left: compactCover.right
                     anchors.leftMargin: 8
                     anchors.right: compactCountdown.visible ? compactCountdown.left : compactPause.left
