@@ -58,8 +58,38 @@ QtObject {
     property var limitWarned: ({})
 
     // The running timer: { label, endsAt, total } in milliseconds, or null. Main keeps it
-    // in the settings, so it survives a restart.
+    // in the settings, so it survives a restart. While focusing (Pomodoro) it also has
+    // focus: "work" | "break" and round: 1, 2, ...
     property var timer: null
+    readonly property bool focusing: timer !== null && timer.focus === "work"
+    readonly property string timerIcon: !timer ? "" : timer.focus === "work" ? "🎯" : timer.focus === "break" ? "☕" : "⏱"
+    readonly property color timerColor: !timer || !timer.focus ? "#ffb020" : timer.focus === "work" ? "#ff6b5c" : "#34c759"
+    // Main binds these to the settings: minutes of focus, of a break, and of the long
+    // break after every fourth round.
+    property int focusMinutes: 25
+    property int breakMinutes: 5
+    property int longBreakMinutes: 15
+    // Main binds this to the setting: hold back notifications that can wait while focusing.
+    property bool quietFocus: true
+    readonly property bool quiet: focusing && quietFocus
+    // Titles of the notifications held back while focusing, shown when the break starts
+    property var missed: []
+
+    // Downloads and transfers in progress: [{ id, title, file, percent, speed,
+    // processed_bytes, total_bytes, suspended }]
+    property var jobs: []
+    // All of them together, from 0 to 1
+    readonly property real jobsProgress: {
+        const total = jobs.reduce((sum, j) => sum + j.total_bytes, 0)
+        if (total > 0)
+            return jobs.reduce((sum, j) => sum + j.processed_bytes, 0) / total
+        return jobs.length ? jobs.reduce((sum, j) => sum + j.percent, 0) / jobs.length / 100 : 0
+    }
+    // When each job was first seen, by id
+    property var jobStarts: ({})
+
+    // { place, temperature, high, low, code, is_day } or null
+    property var weather: null
     // Milliseconds since the epoch, every second while a timer runs
     property real timerNow: Date.now()
     // A timer ran out: Main plays a sound.
@@ -155,8 +185,8 @@ QtObject {
 
     function handleEvent(ev) {
         if (ev.type === "notify") {
-            say(ev.title, ev.body, 5000)
-            notifying = true
+            if (say(ev.title, ev.body, 5000, true))
+                notifying = true
         } else if (ev.type === "upload") {
             handleUpload(ev)
         } else if (ev.type === "level") {
@@ -167,7 +197,13 @@ QtObject {
         } else if (ev.type === "timer") {
             startTimer(ev.seconds, ev.label)
         } else if (ev.type === "timer_cancel") {
-            timer = null
+            stopTimer()
+        } else if (ev.type === "focus") {
+            startFocus(ev.minutes ?? focusMinutes)
+        } else if (ev.type === "jobs") {
+            handleJobs(ev.jobs)
+        } else if (ev.type === "weather") {
+            weather = ev.weather ?? null
         } else if (ev.type === "phone") {
             handlePhone(ev)
         } else if (ev.type === "usage") {
@@ -236,7 +272,7 @@ QtObject {
         if (ev.phase === "done") {
             happy = true
             happyTimer.restart()
-            say(ev.project, qsTr("Finished"), 4000)
+            say(ev.project, qsTr("Finished"), 4000, true)
         } else if (ev.phase === "waiting") {
             say(ev.project, ev.message || qsTr("Needs your attention"), 6000)
         } else if (ev.phase === "permission") {
@@ -370,6 +406,94 @@ QtObject {
         timer = { label: label ?? "", endsAt: timerNow + seconds * 1000, total: seconds * 1000 }
     }
 
+    function stopTimer() {
+        const wasFocusing = focusing
+        timer = null
+        if (wasFocusing)
+            sayMissed(qsTr("Focus ended"))
+    }
+
+    // Pomodoro: `minutes` of focus, a break, focus again, ... until stopped.
+    function startFocus(minutes) {
+        missed = []
+        startFocusPhase("work", 1, minutes)
+    }
+
+    function startFocusPhase(phase, round, workMinutes) {
+        const long = phase === "break" && round % 4 === 0
+        const minutes = phase === "work" ? workMinutes : long ? longBreakMinutes : breakMinutes
+        timerNow = Date.now()
+        timer = {
+            label: phase === "work" ? qsTr("Focus · round %1").arg(round) : long ? qsTr("Long break") : qsTr("Break"),
+            endsAt: timerNow + minutes * 60000,
+            total: minutes * 60000,
+            focus: phase,
+            round: round,
+            workMinutes: workMinutes
+        }
+    }
+
+    // On to the next phase: the work's end (or a skip) starts a break, a break's end the next round.
+    function nextFocusPhase() {
+        if (!timer || !timer.focus)
+            return
+        const t = timer
+        if (t.focus === "work") {
+            startFocusPhase("break", t.round, t.workMinutes)
+            sayMissed("☕ " + timer.label + " · " + qsTr("%1 min").arg(Math.round(timer.total / 60000)))
+        } else {
+            startFocusPhase("work", t.round + 1, t.workMinutes)
+            say("🎯 " + timer.label, qsTr("until %1").arg(Qt.formatTime(new Date(timer.endsAt), "HH:mm")), 6000)
+            notifying = true
+        }
+    }
+
+    // The end of a focus: what was held back meanwhile.
+    function sayMissed(title) {
+        const n = missed.length
+        const body = n === 0 ? qsTr("Nothing came in meanwhile")
+                   : n === 1 ? qsTr("Meanwhile: %1").arg(missed[0])
+                   : qsTr("%1 notifications meanwhile: %2").arg(n).arg(missed.slice(-3).reverse().join(", "))
+        missed = []
+        say(title, body, n > 0 ? 12000 : 6000)
+        notifying = true
+    }
+
+    // The weather's symbol and description, from its WMO code.
+    function weatherIcon(w) {
+        if (!w)
+            return ""
+        const c = w.code
+        return c === 0 ? (w.is_day ? "☀️" : "🌙") : c === 1 ? (w.is_day ? "🌤️" : "🌙") : c === 2 ? "⛅"
+             : c === 3 ? "☁️" : c === 45 || c === 48 ? "🌫️" : c >= 95 ? "⛈️"
+             : (c >= 71 && c <= 77) || c === 85 || c === 86 ? "🌨️"
+             : c >= 51 && c <= 57 || c >= 80 ? "🌦️" : "🌧️"
+    }
+
+    function weatherText(code) {
+        return code === 0 ? qsTr("Clear") : code === 1 ? qsTr("Mostly clear") : code === 2 ? qsTr("Partly cloudy")
+             : code === 3 ? qsTr("Overcast") : code === 45 || code === 48 ? qsTr("Fog")
+             : code >= 51 && code <= 57 ? qsTr("Drizzle") : code >= 61 && code <= 67 ? qsTr("Rain")
+             : code >= 71 && code <= 77 ? qsTr("Snow") : code >= 80 && code <= 82 ? qsTr("Showers")
+             : code === 85 || code === 86 ? qsTr("Snow showers") : code >= 95 ? qsTr("Thunderstorm") : ""
+    }
+
+    function handleJobs(now) {
+        const at = Date.now()
+        const starts = {}
+        for (const job of now)
+            starts[job.id] = jobStarts[job.id] ?? at
+        // A transfer that ran a while and reached the end says so; quick ones just go.
+        for (const job of jobs) {
+            if (!(job.id in starts) && job.percent >= 99 && at - jobStarts[job.id] > 5000) {
+                if (say(qsTr("✓ %1").arg(job.file || job.title), job.title, 4000, true))
+                    notifying = true
+            }
+        }
+        jobStarts = starts
+        jobs = now
+    }
+
     function extendTimer(seconds) {
         if (timer)
             timer = Object.assign({}, timer, { endsAt: timer.endsAt + seconds * 1000, total: timer.total + seconds * 1000 })
@@ -395,14 +519,12 @@ QtObject {
             const who = ev.contact || ev.number || qsTr("Unknown number")
             if (ev.state === "ringing")
                 say(qsTr("📞 Calling: %1").arg(who), ev.device, 30000)
-            else if (ev.state === "missed_call")
-                say(qsTr("Missed call: %1").arg(who), ev.device, 15000)
-            else
+            else if (ev.state !== "missed_call" || !say(qsTr("Missed call: %1").arg(who), ev.device, 15000, true))
                 return // talking: the ringing note just goes away
             notifying = true
         } else if (ev.kind === "message") {
-            say(qsTr("💬 %1").arg(ev.from || qsTr("Message")), ev.body, 10000)
-            notifying = true
+            if (say(qsTr("💬 %1").arg(ev.from || qsTr("Message")), ev.body, 10000, true))
+                notifying = true
         }
     }
 
@@ -421,9 +543,9 @@ QtObject {
             if (w.used_percent >= threshold && !limitWarned[key]) {
                 limitWarned[w.resets_at + ":80"] = true
                 limitWarned[key] = true
-                say(qsTr("%1% of your 5-hour Claude limit used").arg(Math.round(w.used_percent)),
-                    qsTr("Resets at %1").arg(Qt.formatTime(new Date(w.resets_at * 1000), "HH:mm")), 10000)
-                notifying = true
+                if (say(qsTr("%1% of your 5-hour Claude limit used").arg(Math.round(w.used_percent)),
+                        qsTr("Resets at %1").arg(Qt.formatTime(new Date(w.resets_at * 1000), "HH:mm")), 10000, true))
+                    notifying = true
                 break
             }
         }
@@ -505,11 +627,18 @@ QtObject {
         }
     }
 
-    function say(title, body, duration) {
+    // Shows a message for `duration` ms, opening the island. One that `canWait` is held
+    // back while focusing (false is returned then) and listed when the break starts.
+    function say(title, body, duration, canWait) {
+        if (canWait && quiet) {
+            missed = missed.concat([title])
+            return false
+        }
         headline = title
         subline = body
         alertTimer.interval = duration
         alertTimer.restart()
+        return true
     }
 
     property Timer alertTimer: Timer {
@@ -529,10 +658,14 @@ QtObject {
             notch.timerNow = Date.now()
             if (notch.timer && notch.timerNow >= notch.timer.endsAt) {
                 const label = notch.timer.label
+                notch.timerFinished(label)
+                if (notch.timer.focus) {
+                    notch.nextFocusPhase()
+                    return
+                }
                 notch.timer = null
                 notch.say(qsTr("⏰ Time's up"), label || qsTr("Timer"), 20000)
                 notch.notifying = true
-                notch.timerFinished(label)
             }
         }
     }

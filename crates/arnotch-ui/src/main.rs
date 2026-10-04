@@ -41,6 +41,20 @@ fn main() -> anyhow::Result<()> {
         .name("notch-calendar".into())
         .spawn(move || watch_calendar(urls))?;
 
+    let (weather_city, cities) = std::sync::mpsc::channel();
+    _ = bridge::WEATHER_CITY.set(weather_city);
+    std::thread::Builder::new()
+        .name("notch-weather".into())
+        .spawn(move || watch_weather(cities))?;
+
+    std::thread::Builder::new()
+        .name("notch-jobs".into())
+        .spawn(|| {
+            if let Err(err) = arnotch_core::jobs::watch(bridge::publish_jobs) {
+                tracing::info!("no download progress: {err:#}");
+            }
+        })?;
+
     std::thread::Builder::new()
         .name("notch-phone".into())
         .spawn(|| {
@@ -190,6 +204,55 @@ fn watch_calendar(urls: std::sync::mpsc::Receiver<String>) {
             }
             // The error never contains the address, which is a secret.
             Err(err) => tracing::warn!("calendar: {err:#}"),
+        }
+    }
+}
+
+/// Downloads the weather every 20 minutes, and right away when the city changes. The city
+/// is looked up once; a failed lookup is retried with the next download.
+fn watch_weather(cities: std::sync::mpsc::Receiver<String>) {
+    use arnotch_core::weather;
+    use std::sync::mpsc::RecvTimeoutError;
+
+    let mut city = String::new();
+    let mut place = None;
+    let mut shown = None;
+    loop {
+        let wait = if city.is_empty() {
+            Duration::MAX
+        } else {
+            Duration::from_secs(1200)
+        };
+        match cities.recv_timeout(wait) {
+            Ok(new) if new.trim() == city => continue,
+            Ok(new) => {
+                city = new.trim().to_owned();
+                place = None;
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
+        if city.is_empty() {
+            shown = None;
+            bridge::publish_weather(None);
+            continue;
+        }
+        if place.is_none() {
+            match weather::find_place(&city, i18n::language()) {
+                Ok(found) => place = Some(found),
+                Err(err) => {
+                    tracing::warn!("weather: {err:#}");
+                    continue;
+                }
+            }
+        }
+        match weather::current(place.as_ref().expect("found above")) {
+            Ok(now) if shown.as_ref() != Some(&now) => {
+                shown = Some(now.clone());
+                bridge::publish_weather(Some(now));
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!("weather: {err:#}"),
         }
     }
 }

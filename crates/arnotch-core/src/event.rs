@@ -46,6 +46,12 @@ pub enum Event {
     },
     /// Cancel the running timer.
     TimerCancel,
+    /// Start focusing (Pomodoro): work for `minutes` (the settings' length when absent),
+    /// then a break, and so on until cancelled: `arnotchctl focus 50`.
+    Focus {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        minutes: Option<u64>,
+    },
     /// Put files (absolute paths) on the shelf.
     Shelve { paths: Vec<String> },
     /// Show files (absolute paths) with the drop targets to pick where they go, e.g. a
@@ -112,6 +118,14 @@ pub enum Event {
     #[serde(skip_deserializing)]
     Calendar {
         meetings: Vec<crate::calendar::Meeting>,
+    },
+    /// Downloads and file transfers in progress; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Jobs { jobs: Vec<crate::jobs::Job> },
+    /// The weather, `None` when it is off or unknown; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Weather {
+        weather: Option<crate::weather::Weather>,
     },
     /// What's playing, `None` when no player has a track; published by the notch itself.
     #[serde(skip_deserializing)]

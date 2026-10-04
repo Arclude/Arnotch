@@ -41,11 +41,28 @@ QtObject {
         // The calendar's iCalendar (ICS) address, a secret; empty for no calendar
         property string calendarUrl: ""
         onCalendarUrlChanged: app.bridge.setCalendarUrl(calendarUrl)
+        // Focus (Pomodoro): minutes of work, of a break, and of the long break after every
+        // fourth round; and whether notifications wait (the desktop's too) while focusing
+        property int focusMinutes: 25
+        property int breakMinutes: 5
+        property int longBreakMinutes: 15
+        property bool focusSilence: true
+        // City for the weather, e.g. "İstanbul" or "Kadıköy, İstanbul"; empty for none
+        property string weatherCity: ""
+        onWeatherCityChanged: app.bridge.setWeatherCity(weatherCity)
     }
+
+    // The desktop's notifications are quiet while focusing.
+    readonly property bool doNotDisturb: state.quiet
+    onDoNotDisturbChanged: bridge.setDoNotDisturb(doNotDisturb)
 
     property NotchState state: NotchState {
         indicators: app.settings.indicators
         phoneAlerts: app.settings.phone
+        focusMinutes: app.settings.focusMinutes
+        breakMinutes: app.settings.breakMinutes
+        longBreakMinutes: app.settings.longBreakMinutes
+        quietFocus: app.settings.focusSilence
         // The shelf survives restarts.
         Component.onCompleted: {
             try {
@@ -74,11 +91,11 @@ QtObject {
                     return
             }
             const firstLine = body.split("\n").find(line => line.trim() !== "") ?? ""
-            if (status === "done")
-                app.state.say(qsTr("Claude answered"), firstLine.replace(/[*_`#>]/g, "").trim(), 6000)
-            else
-                app.state.say(qsTr("Claude couldn't answer"), firstLine, 8000)
-            app.state.notifying = true
+            const shown = status === "done"
+                ? app.state.say(qsTr("Claude answered"), firstLine.replace(/[*_`#>]/g, "").trim(), 6000, true)
+                : app.state.say(qsTr("Claude couldn't answer"), firstLine, 8000, true)
+            if (shown)
+                app.state.notifying = true
         }
 
         onPermissionRequested: requestId => {
@@ -92,7 +109,11 @@ QtObject {
     }
 
     property NotchBridge bridge: NotchBridge {
-        Component.onCompleted: setCalendarUrl(app.settings.calendarUrl)
+        Component.onCompleted: {
+            setCalendarUrl(app.settings.calendarUrl)
+            setWeatherCity(app.settings.weatherCity)
+            setDoNotDisturb(app.doNotDisturb)
+        }
         onEventReceived: json => {
             const ev = JSON.parse(json)
             if (ev.type === "open_settings")

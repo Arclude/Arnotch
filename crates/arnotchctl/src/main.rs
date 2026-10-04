@@ -30,6 +30,7 @@ const USAGE: &str = "usage:
   arnotchctl toggle [activity|chat|terminals|shelf]
   arnotchctl close
   arnotchctl timer <25m|1h30m|90s|10> [label] | cancel
+  arnotchctl focus [25m|50] | stop
   arnotchctl shelf <file>...
   arnotchctl share <file>
   arnotchctl screenshot
@@ -63,6 +64,17 @@ fn main() -> ExitCode {
             }),
             _ => {
                 eprintln!("arnotchctl: the time must look like 25m, 1h30m, 90s or 10 (minutes)");
+                ExitCode::from(2)
+            }
+        },
+        ["focus"] => send(&Event::Focus { minutes: None }),
+        ["focus", "stop"] => send(&Event::TimerCancel),
+        ["focus", time] => match arnotch_core::system::parse_duration(time) {
+            Some(seconds) if seconds >= 60 => send(&Event::Focus {
+                minutes: Some(seconds / 60),
+            }),
+            _ => {
+                eprintln!("arnotchctl: the focus time must look like 25m, 1h or 50 (minutes)");
                 ExitCode::from(2)
             }
         },

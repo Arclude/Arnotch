@@ -187,6 +187,42 @@ pub fn watch_battery(on_change: impl Fn(Battery)) -> zbus::Result<()> {
     Ok(())
 }
 
+/// Keeps the desktop's notifications quiet (Do Not Disturb) while it lives, through the
+/// notification server's `Inhibit` call (KDE Plasma, GNOME and others). The server ends it
+/// when the connection closes, so a crash never leaves notifications off.
+pub struct NotificationInhibitor {
+    conn: Connection,
+    cookie: u32,
+}
+
+impl NotificationInhibitor {
+    pub fn new(reason: &str) -> zbus::Result<Self> {
+        let conn = Connection::session()?;
+        let hints: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+        let reply = conn.call_method(
+            Some("org.freedesktop.Notifications"),
+            "/org/freedesktop/Notifications",
+            Some("org.freedesktop.Notifications"),
+            "Inhibit",
+            &("arnotch", reason, hints),
+        )?;
+        let cookie: u32 = reply.body().deserialize()?;
+        Ok(Self { conn, cookie })
+    }
+}
+
+impl Drop for NotificationInhibitor {
+    fn drop(&mut self) {
+        _ = self.conn.call_method(
+            Some("org.freedesktop.Notifications"),
+            "/org/freedesktop/Notifications",
+            Some("org.freedesktop.Notifications"),
+            "UnInhibit",
+            &(self.cookie,),
+        );
+    }
+}
+
 /// A duration such as "25m", "1h30m", "90s" or "10" (minutes), in seconds.
 pub fn parse_duration(text: &str) -> Option<u64> {
     let text = text.trim().to_ascii_lowercase();

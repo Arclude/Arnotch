@@ -30,6 +30,14 @@ fn lang() -> Lang {
     })
 }
 
+/// The user's language as an ISO 639-1 code ("en", "tr").
+pub fn language() -> &'static str {
+    match lang() {
+        Lang::English => "en",
+        Lang::Turkish => "tr",
+    }
+}
+
 /// The message in the user's language.
 pub fn tr(text: &'static str) -> &'static str {
     match lang() {
@@ -106,6 +114,8 @@ fn turkish(text: &str) -> Option<&'static str> {
         }
         // Claude Code
         "Denied from arnotch" => "arnotch'tan reddedildi",
+        // Focus
+        "Focusing" => "Odaklanılıyor",
         _ => return None,
     })
 }

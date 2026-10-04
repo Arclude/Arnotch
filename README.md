@@ -43,6 +43,7 @@ cargo build --release
 ./target/release/arnotchctl open terminals   # or: open activity|chat|shelf, close
 ./target/release/arnotchctl toggle chat      # open on a tab, or close it (for shortcuts)
 ./target/release/arnotchctl timer 25m Focus  # start a timer (or: timer cancel)
+./target/release/arnotchctl focus            # focus for 25 minutes, then a break (or: focus 50, focus stop)
 ./target/release/arnotchctl settings
 ./target/release/arnotchctl terminals        # list open terminals as JSON
 ```
@@ -157,6 +158,35 @@ The *Activity* tab starts a 5, 15 or 25 minute timer, or a custom one (`10 laund
 The closed island counts down in place of the clock (beside the song while music plays), and
 when time is up the island opens and plays the sound theme's alarm. A running timer survives a
 restart.
+
+## Focus
+
+*Focus* next to the timer buttons (or `arnotchctl focus`, `arnotchctl focus 50`) starts a
+Pomodoro: 25 minutes of focus, a 5 minute break, and a 15 minute break after every fourth round,
+until you stop it (lengths in the settings). The closed island counts down in red while you
+focus and in green during a break; ⏭ moves on to the break, or skips it.
+
+While you focus, notifications that can wait are held back: the desktop's (Do Not Disturb,
+ended even if arnotch crashes) and the island's own, such as finished commands, messages, Claude
+finishing a turn or a chat answer. The break starts with what came in meanwhile. Calls, meetings,
+Claude asking for permission and a low battery still come through. *Hold notifications while
+focusing* in the settings turns that off.
+
+## Downloads
+
+Browser downloads (with Plasma Browser Integration), copies and moves in Dolphin and other KDE
+apps' transfers show as a thin bar along the bottom of the closed island, and with their file,
+progress and speed in the *Activity* tab. A transfer that took more than a few seconds says so
+when it finishes. arnotch reads them the way Plasma shows them in its notifications, by
+watching the session bus (as `dbus-monitor` does), so it needs KDE Plasma.
+
+## Weather
+
+Type your city in the settings (*Weather*): "İstanbul", or "Kadıköy, İstanbul" for a district.
+The closed island shows the temperature on the right while nothing else is there, the
+*Activity* tab the conditions and today's high and low. It comes from
+[Open-Meteo](https://open-meteo.com) (free, no account), every 20 minutes; only the city name
+and its coordinates are sent.
 
 ## Phone
 

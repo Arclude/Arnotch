@@ -113,6 +113,16 @@ pub mod qobject {
         #[cxx_name = "setCalendarUrl"]
         fn set_calendar_url(self: &NotchBridge, url: &QString);
 
+        /// The city for the weather (empty: no weather). It arrives as `weather` events.
+        #[qinvokable]
+        #[cxx_name = "setWeatherCity"]
+        fn set_weather_city(self: &NotchBridge, city: &QString);
+
+        /// Keeps the desktop's notifications quiet (Do Not Disturb), or lets them through again.
+        #[qinvokable]
+        #[cxx_name = "setDoNotDisturb"]
+        fn set_do_not_disturb(self: &NotchBridge, on: bool);
+
         /// Plays a sound of the desktop's sound theme, e.g. "alarm-clock-elapsed".
         #[qinvokable]
         #[cxx_name = "playSound"]
@@ -187,6 +197,29 @@ pub fn publish_calendar(meetings: Vec<arnotch_core::calendar::Meeting>) {
 
 /// Tells the calendar thread about a new address.
 pub static CALENDAR_URL: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+
+/// Tells the weather thread about a new city.
+pub static WEATHER_CITY: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+/// The weather, replayed to bridges created after it was published.
+static WEATHER: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_weather(weather: Option<arnotch_core::weather::Weather>) {
+    let event = Event::Weather { weather };
+    *WEATHER.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
+
+/// The transfers in progress, likewise.
+static JOBS: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_jobs(jobs: Vec<arnotch_core::jobs::Job>) {
+    let event = Event::Jobs { jobs };
+    *JOBS.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
+
+/// Do Not Disturb while focusing, ended by dropping it.
+static QUIET: Mutex<Option<arnotch_core::system::NotificationInhibitor>> = Mutex::new(None);
 
 /// The clipboard history, likewise.
 static CLIPBOARD: Mutex<Option<Event>> = Mutex::new(None);
@@ -452,6 +485,24 @@ impl qobject::NotchBridge {
         }
     }
 
+    pub fn set_weather_city(&self, city: &QString) {
+        if let Some(tx) = WEATHER_CITY.get() {
+            _ = tx.send(city.to_string());
+        }
+    }
+
+    pub fn set_do_not_disturb(&self, on: bool) {
+        let mut quiet = QUIET.lock().unwrap();
+        if !on {
+            *quiet = None;
+        } else if quiet.is_none() {
+            match arnotch_core::system::NotificationInhibitor::new(tr("Focusing")) {
+                Ok(inhibitor) => *quiet = Some(inhibitor),
+                Err(err) => tracing::warn!("cannot turn on Do Not Disturb: {err:#}"),
+            }
+        }
+    }
+
     pub fn play_sound(&self, name: &QString) {
         arnotch_core::system::play_sound(&name.to_string());
     }
@@ -522,6 +573,8 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
             MEDIA.lock().unwrap().clone(),
             CLIPBOARD.lock().unwrap().clone(),
             CALENDAR.lock().unwrap().clone(),
+            WEATHER.lock().unwrap().clone(),
+            JOBS.lock().unwrap().clone(),
         ];
         for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));

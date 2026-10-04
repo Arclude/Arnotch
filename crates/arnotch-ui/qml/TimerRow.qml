@@ -1,11 +1,15 @@
 import QtQuick
 
-// A timer: quick buttons to start one, or the running one with its countdown.
+// A timer: quick buttons to start one (or to focus), or the running one with its countdown.
 Column {
     id: row
 
-    // NotchState.timer: { label, endsAt, total } (milliseconds), or null
+    // NotchState.timer: { label, endsAt, total } (milliseconds), or null; while focusing
+    // also { focus: "work" | "break", round }
     required property var timer
+    // NotchState.timerIcon and timerColor
+    required property string icon
+    required property color tint
     // Milliseconds since the epoch, ticking every second while a timer runs
     required property real now
 
@@ -13,8 +17,11 @@ Column {
     property bool editing: false
 
     signal started(int seconds, string label)
+    signal focusStarted()
     signal cancelled()
     signal extended(int seconds)
+    // Focusing: on to the break, or from the break to the next round
+    signal skipped()
 
     readonly property real remaining: timer ? Math.max(0, timer.endsAt - now) : 0
 
@@ -69,6 +76,11 @@ Column {
             tint: "#c9ccd2"
             onClicked: row.editing = true
         }
+        PillButton {
+            text: "🎯 " + qsTr("Focus")
+            tint: "#ff6b5c"
+            onClicked: row.focusStarted()
+        }
     }
 
     SendField {
@@ -97,8 +109,8 @@ Column {
             id: countdown
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "⏱ " + row.format(row.remaining)
-            color: row.remaining < 60000 ? "#ffb020" : "#f2f3f5"
+            text: row.icon + " " + row.format(row.remaining)
+            color: row.timer && row.timer.focus ? row.tint : row.remaining < 60000 ? "#ffb020" : "#f2f3f5"
             font.pixelSize: 16
             font.weight: Font.DemiBold
             font.features: { "tnum": 1 }
@@ -129,7 +141,7 @@ Column {
                     width: parent.width * (row.timer ? 1 - row.remaining / row.timer.total : 0)
                     height: parent.height
                     radius: 2
-                    color: "#ffb020"
+                    color: row.tint
                 }
             }
         }
@@ -145,8 +157,15 @@ Column {
                 onClicked: row.extended(300)
             }
             IconButton {
+                visible: row.timer !== null && !!row.timer.focus
+                glyph: "⏭"
+                hint: row.timer && row.timer.focus === "work" ? qsTr("Take the break now") : qsTr("Skip the break")
+                tint: "#8b909a"
+                onClicked: row.skipped()
+            }
+            IconButton {
                 glyph: "×"
-                hint: qsTr("Cancel the timer")
+                hint: row.timer && row.timer.focus ? qsTr("Stop focusing") : qsTr("Cancel the timer")
                 tint: "#8b909a"
                 onClicked: row.cancelled()
             }

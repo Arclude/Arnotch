@@ -66,6 +66,17 @@ Window {
     readonly property bool sharingOn: settings.shareService !== "off"
 
     signal settingsRequested()
+
+    // "850 KB/s", "3.2 MB/s"
+    function formatSpeed(bytesPerSecond) {
+        const units = ["B/s", "KB/s", "MB/s", "GB/s"]
+        let value = bytesPerSecond, unit = 0
+        while (value >= 1000 && unit < units.length - 1) {
+            value /= 1000
+            unit++
+        }
+        return (unit >= 2 && value < 10 ? value.toLocaleString(Qt.locale(), "f", 1) : Math.round(value)) + " " + units[unit]
+    }
     readonly property bool onActivity: shownTab === "activity"
 
     // Show the detailed activity card instead of the headline.
@@ -375,8 +386,8 @@ Window {
                     anchors.rightMargin: root.notch.sessions.count > 0 ? 86 : 40
                     anchors.verticalCenter: parent.verticalCenter
                     visible: root.notch.timer !== null
-                    text: "⏱ " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
-                    color: "#ffb020"
+                    text: root.notch.timerIcon + " " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
+                    color: root.notch.timerColor
                     font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
                     font.weight: Font.DemiBold
                     font.features: { "tnum": 1 }
@@ -397,8 +408,8 @@ Window {
             Text {
                 visible: root.notch.timer !== null && !root.levelShown && !root.mediaShown
                 anchors.centerIn: parent
-                text: "⏱ " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
-                color: "#ffb020"
+                text: root.notch.timerIcon + " " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
+                color: root.notch.timerColor
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
                 font.weight: Font.DemiBold
                 font.features: { "tnum": 1 }
@@ -412,6 +423,33 @@ Window {
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
                 font.weight: Font.DemiBold
                 font.features: { "tnum": 1 }
+            }
+
+            // The weather, on the right while nothing else is there
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.notch.weather !== null && !root.levelShown && !root.mediaShown
+                         && root.notch.sessions.count === 0 && !(root.notch.media !== null && root.notch.media.playing)
+                text: root.notch.weatherIcon(root.notch.weather) + " " + (root.notch.weather ? Math.round(root.notch.weather.temperature) + "°" : "")
+                color: "#c9ccd2"
+                font.pixelSize: Math.min(12, Math.round(root.collapsedHeight * 0.42))
+                font.weight: Font.DemiBold
+            }
+
+            // Downloads and copies: a thin bar along the bottom edge, between the corners
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 2
+                x: island.bottomLeftRadius * 0.6
+                width: (parent.width - 2 * x) * root.notch.jobsProgress
+                height: 2
+                radius: 1
+                visible: root.notch.jobs.length > 0
+                color: "#4c8dff"
+
+                Behavior on width { NumberAnimation { duration: 250 } }
             }
 
             // Music playing and no agent at work: its cover. Static, so it costs nothing.
@@ -502,6 +540,57 @@ Window {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: root.tab = tabChip.modelData.id
+                        }
+                    }
+                }
+            }
+
+            // Downloads and copies, as in "Downloading film.mkv  54% · 3.2 MB/s"
+            Repeater {
+                model: root.targetsShown || !root.onActivity ? [] : root.notch.jobs
+
+                Column {
+                    required property var modelData
+
+                    width: expandedContent.width
+                    spacing: 6
+
+                    Item {
+                        width: parent.width
+                        height: 16
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: jobPercent.left
+                            anchors.rightMargin: 8
+                            elide: Text.ElideMiddle
+                            text: (modelData.title ? modelData.title + "  " : "") + modelData.file
+                            color: "#f2f3f5"
+                            font.pixelSize: 12
+                        }
+                        Text {
+                            id: jobPercent
+                            anchors.right: parent.right
+                            text: modelData.suspended ? qsTr("paused")
+                                  : modelData.percent + "%" + (modelData.speed > 0 ? "  ·  " + root.formatSpeed(modelData.speed) : "")
+                            color: "#8b909a"
+                            font.pixelSize: 12
+                            font.features: { "tnum": 1 }
+                        }
+                    }
+                    Rectangle {
+                        width: parent.width
+                        height: 4
+                        radius: 2
+                        color: "#1affffff"
+
+                        Rectangle {
+                            width: parent.width * modelData.percent / 100
+                            height: parent.height
+                            radius: 2
+                            color: modelData.suspended ? "#8b909a" : "#4c8dff"
+
+                            Behavior on width { NumberAnimation { duration: 250 } }
                         }
                     }
                 }
@@ -724,14 +813,47 @@ Window {
                 }
             }
 
+            // The weather: "☀️ 19°  Clear · Kadıköy, İstanbul   ↑21° ↓15°"
+            Row {
+                visible: root.onActivity && root.opened && root.notch.weather !== null && !root.targetsShown
+                spacing: 8
+
+                readonly property var w: root.notch.weather ?? ({ place: "", temperature: 0, high: 0, low: 0, code: 0, is_day: true })
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.notch.weatherIcon(parent.w) + " " + Math.round(parent.w.temperature) + "°"
+                    color: "#f2f3f5"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: [root.notch.weatherText(parent.w.code), parent.w.place].filter(Boolean).join("  ·  ")
+                    color: "#c9ccd2"
+                    font.pixelSize: 12
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "↑" + Math.round(parent.w.high) + "°  ↓" + Math.round(parent.w.low) + "°"
+                    color: "#8b909a"
+                    font.pixelSize: 11
+                    font.features: { "tnum": 1 }
+                }
+            }
+
             TimerRow {
                 id: timerRow
                 width: parent.width
                 visible: root.onActivity && (root.opened || root.notch.timer !== null) && !root.targetsShown
                 timer: root.notch.timer
+                icon: root.notch.timerIcon
+                tint: root.notch.timerColor
                 now: root.notch.timerNow
                 onStarted: (seconds, label) => root.notch.startTimer(seconds, label)
-                onCancelled: root.notch.timer = null
+                onFocusStarted: root.notch.startFocus(root.notch.focusMinutes)
+                onSkipped: root.notch.nextFocusPhase()
+                onCancelled: root.notch.stopTimer()
                 onExtended: seconds => root.notch.extendTimer(seconds)
             }
 

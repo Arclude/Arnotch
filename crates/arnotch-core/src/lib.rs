@@ -11,10 +11,12 @@ pub mod event;
 pub mod focus;
 pub mod i18n;
 pub mod ipc;
+pub mod jobs;
 pub mod media;
 pub mod phone;
 pub mod share;
 pub mod system;
 pub mod terminals;
+pub mod weather;
 
 pub use event::{AgentPhase, Decision, Event, Reply};
