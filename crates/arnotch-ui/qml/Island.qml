@@ -115,7 +115,22 @@ Window {
     // width change would move it, and KWin keeps sending drag positions relative to
     // where the window was when the drag entered (the drop targets were off by one).
     width: maxExpandedWidth + 44
-    height: Math.max(island.height, expanded ? expandedHeight : collapsedHeight) + pad
+    // The window grows to the tallest the island has been and stays so: resizing it is a
+    // round trip to the compositor, which costs the first frame or two of the opening.
+    // The transparent rest lets clicks through anyway (see inputRect).
+    height: windowHeight
+    readonly property real wantedHeight: heightSpring.extent + pad
+    // Starts tall enough for most of what the island shows opened, so even the first
+    // opening needs no resize; from then on it only grows. (The assignment ends the binding.)
+    property real windowHeight: wantedHeight
+    Component.onCompleted: windowHeight = Math.max(wantedHeight, 320)
+    // Changes that come together (the content's height settles over a few bindings when
+    // the island opens) are applied once.
+    onWantedHeightChanged: Qt.callLater(growHeight)
+    function growHeight() {
+        if (wantedHeight > windowHeight)
+            windowHeight = wantedHeight
+    }
     x: Screen.virtualX + (Screen.width - width) / 2
     y: Screen.virtualY
     color: "transparent"
@@ -238,10 +253,8 @@ Window {
 
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
-        width: root.expanded ? root.expandedWidth : root.levelShown ? 310
-             : root.mediaShown ? (root.notch.sessions.count > 0 ? 420 : 380) + (root.notch.timer ? 60 : 0)
-             : root.collapsedWidth
-        height: root.expanded ? root.expandedHeight : root.collapsedHeight
+        width: widthSpring.value
+        height: heightSpring.value
         topLeftRadius: 0
         topRightRadius: 0
         bottomLeftRadius: root.expanded ? 26 : Math.round(root.collapsedHeight * 0.45)
@@ -253,8 +266,16 @@ Window {
 
         // A real spring: it settles in about 300 ms with a ~5% overshoot (which the window's
         // shadow margin has room for), and a change of mind mid-way keeps its momentum.
-        Behavior on width { SpringAnimation { spring: 6; damping: 0.38; epsilon: 0.5 } }
-        Behavior on height { SpringAnimation { spring: 6; damping: 0.38; epsilon: 0.5 } }
+        Spring {
+            id: widthSpring
+            target: root.expanded ? root.expandedWidth : root.levelShown ? 310
+                  : root.mediaShown ? (root.notch.sessions.count > 0 ? 420 : 380) + (root.notch.timer ? 60 : 0)
+                  : root.collapsedWidth
+        }
+        Spring {
+            id: heightSpring
+            target: root.expanded ? root.expandedHeight : root.collapsedHeight
+        }
         Behavior on bottomLeftRadius { NumberAnimation { duration: 300 } }
 
         HoverHandler {

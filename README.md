@@ -187,7 +187,8 @@ The island uses Qt's software renderer by default: for a surface this small it n
 the memory of a GPU context (≈35 MB PSS). It uses about 0.2% CPU when idle and 0.5% while an
 agent works: animations only draw frames while something moves, and only while they are visible.
 They run at the display's refresh rate (144 Hz, 180 Hz, ...) rather than Qt's usual 60 steps a
-second; `ARNOTCH_ANIMATION_HZ` caps it.
+second, one frame per refresh, paced by the compositor; `ARNOTCH_QT_ANIMATIONS=1` goes back to
+Qt's own timer.
 Set `ARNOTCH_RENDERER=gpu` to use the GPU instead.
 
 ## Claude Code integration

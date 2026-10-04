@@ -2,6 +2,7 @@
 
 #include <QAnimationDriver>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QIcon>
 #include <QLocale>
@@ -13,6 +14,115 @@
 #include <QTranslator>
 
 namespace {
+
+// Qt's software renderer advances animations from its own 16 ms timer, out of step with
+// the display: on a 144 or 180 Hz screen frames came in bunches (two within a millisecond,
+// then a 15 ms gap), which shows as stutter. This driver advances animations when the
+// compositor is ready for a window's next frame (its update request, which Qt on Wayland
+// holds back until the frame callback), just before that frame is drawn, and asks for
+// another one after it is shown, so the compositor sets the pace. The animations' clock
+// moves one refresh interval per frame rather than by the wall clock: when that request
+// comes varies by a millisecond or two within a refresh, and the motion would vary with it.
+// It catches up in whole intervals when frames are skipped. When nothing changes on screen
+// no frame is shown; a short watchdog keeps the animations going then.
+class FrameDriver : public QAnimationDriver
+{
+public:
+    explicit FrameDriver(QObject *parent)
+        : QAnimationDriver(parent)
+    {
+        watchdog.setSingleShot(true);
+        watchdog.setTimerType(Qt::PreciseTimer);
+        connect(&watchdog, &QTimer::timeout, this, &FrameDriver::requestFrames);
+    }
+
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        auto *window = qobject_cast<QQuickWindow *>(watched);
+        if (!window)
+            return false;
+        if (event->type() == QEvent::UpdateRequest && isRunning()) {
+            // Advanced before the window handles the request, so the frame it draws now
+            // already has the animations' new state.
+            step(window);
+            advance();
+            if (isRunning())
+                watchdog.start(watchdogMs());
+        } else if (event->type() == QEvent::Show && !window->property("notchFramesHooked").toBool()) {
+            window->setProperty("notchFramesHooked", true);
+            connect(window, &QQuickWindow::frameSwapped, this, [this, window] {
+                // Throttled by Qt until the compositor wants the next frame.
+                if (isRunning())
+                    window->requestUpdate();
+            });
+        }
+        return false;
+    }
+
+    qint64 elapsed() const override
+    {
+        return qRound64(qMax<qreal>(time, 0));
+    }
+
+protected:
+    void start() override
+    {
+        clock.start();
+        time = -1;
+        QAnimationDriver::start();
+        requestFrames();
+    }
+
+    void stop() override
+    {
+        watchdog.stop();
+        QAnimationDriver::stop();
+    }
+
+private:
+    void step(const QQuickWindow *window)
+    {
+        const qreal hz = window->screen() ? window->screen()->refreshRate() : 60;
+        const qreal interval = 1000 / (hz > 0 ? hz : 60);
+        const qreal now = clock.nsecsElapsed() / 1e6;
+        if (time < 0) { // the first frame since start()
+            time = now;
+            return;
+        }
+        qreal next = time + interval;
+        while (next < now - interval * 1.5)
+            next += interval;
+        // Ahead, as when windows on two screens both draw: follow the wall clock.
+        if (next > now + interval)
+            next = qMax(time, now);
+        time = next;
+    }
+
+    void requestFrames()
+    {
+        for (QWindow *window : QGuiApplication::topLevelWindows()) {
+            if (window->isVisible() && qobject_cast<QQuickWindow *>(window))
+                window->requestUpdate();
+        }
+        watchdog.start(watchdogMs());
+    }
+
+    // A little over two refresh intervals of the fastest screen.
+    static int watchdogMs()
+    {
+        static const int ms = [] {
+            qreal hz = 60;
+            for (const QScreen *screen : QGuiApplication::screens())
+                hz = qMax(hz, screen->refreshRate());
+            return qMax(4, int(2000 / hz) + 1);
+        }();
+        return ms;
+    }
+
+    QTimer watchdog;
+    QElapsedTimer clock;
+    qreal time = -1; // ms since start()
+};
 
 // Limits a window's input to the rect in its QML "inputRect" property, so the
 // transparent rest of the window lets clicks through to the windows below.
@@ -36,49 +146,6 @@ public:
         });
         return false;
     }
-};
-
-// Qt's software renderer advances animations from a 16 ms timer, so on a 144 or 180 Hz
-// display they move only every third frame or so. This driver advances them at the
-// display's rate instead (ARNOTCH_ANIMATION_HZ overrides it), and only while one runs.
-class DisplayRateDriver : public QAnimationDriver
-{
-public:
-    explicit DisplayRateDriver(QObject *parent)
-        : QAnimationDriver(parent)
-    {
-        timer.setTimerType(Qt::PreciseTimer);
-        connect(&timer, &QTimer::timeout, this, [this] { advance(); });
-    }
-
-protected:
-    void start() override
-    {
-        QAnimationDriver::start();
-        timer.start(intervalMs());
-    }
-
-    void stop() override
-    {
-        timer.stop();
-        QAnimationDriver::stop();
-    }
-
-private:
-    static int intervalMs()
-    {
-        qreal hz = qEnvironmentVariableIntValue("ARNOTCH_ANIMATION_HZ");
-        if (hz <= 0) {
-            hz = 60;
-            for (const QScreen *screen : QGuiApplication::screens())
-                hz = qMax(hz, screen->refreshRate());
-        }
-        // Rounded down: a tick too many is skipped by the compositor's frame pacing,
-        // one too few would drop a frame.
-        return qMax(1, int(1000 / hz));
-    }
-
-    QTimer timer;
 };
 
 } // namespace
@@ -110,13 +177,22 @@ std::unique_ptr<QApplication> notchAppNew()
     // of a GPU context and less CPU. ARNOTCH_RENDERER=gpu (or QT_QUICK_BACKEND) opts out.
     if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND") && qgetenv("ARNOTCH_RENDERER") != "gpu")
         QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+    // Each frame is drawn whole. With partial updates, what the island clips away as it
+    // shrinks was sometimes left behind in the transparent part of the window, as grey
+    // streaks under the closed island. The window is small; drawing it all costs little.
+    if (!qEnvironmentVariableIsSet("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES"))
+        qputenv("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES", "0");
 
     auto app = std::make_unique<QApplication>(argc, argv);
     app->setWindowIcon(QIcon(QStringLiteral(":/icons/arnotch.svg")));
 
     app->installEventFilter(new InputMaskFilter(app.get()));
-    if (QQuickWindow::sceneGraphBackend() == QLatin1String("software"))
-        (new DisplayRateDriver(app.get()))->install();
+    if (QQuickWindow::sceneGraphBackend() == QLatin1String("software")
+        && qEnvironmentVariableIsEmpty("ARNOTCH_QT_ANIMATIONS")) {
+        auto *driver = new FrameDriver(app.get());
+        app->installEventFilter(driver);
+        driver->install();
+    }
 
     // The islands live on even when the settings window is closed.
     app->setQuitOnLastWindowClosed(false);

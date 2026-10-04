@@ -30,6 +30,7 @@ fn main() {
         "qml/LimitsRow.qml",
         "qml/AttachDialog.qml",
         "qml/TimerRow.qml",
+        "qml/Spring.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")
