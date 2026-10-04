@@ -16,6 +16,9 @@ anything on the user's computer.";
 
 /// Images up to this size go to Claude as they are; larger ones only by path.
 const MAX_IMAGE: u64 = 5 * 1024 * 1024;
+/// PDFs up to this size go to Claude as documents, which it reads page by page (the API
+/// takes up to 32 MB and 100 pages); larger ones only by path.
+const MAX_PDF: u64 = 20 * 1024 * 1024;
 /// Text files up to this size go with their contents.
 const MAX_TEXT: u64 = 200 * 1024;
 
@@ -96,8 +99,9 @@ pub fn ask(session_id: &str, resume: bool, request: &Request) -> anyhow::Result<
     Ok(Answer { child })
 }
 
-/// The message's content blocks: the prompt, then each attachment as an image, as text,
-/// or by path when it is neither (Claude can read it when file reading is on).
+/// The message's content blocks: the prompt, then each attachment as an image, a PDF
+/// document or text, or by path when it is none of these (Claude can read it when file
+/// reading is on).
 fn content(request: &Request) -> Vec<serde_json::Value> {
     use base64::Engine;
 
@@ -117,6 +121,18 @@ fn content(request: &Request) -> Vec<serde_json::Value> {
                 "type": "image",
                 "source": { "type": "base64", "media_type": media_type, "data": data },
             }));
+        } else if is_pdf(path)
+            && size <= MAX_PDF
+            && let Ok(bytes) = std::fs::read(path)
+        {
+            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+            blocks.push(
+                serde_json::json!({ "type": "text", "text": format!("Attached PDF: {name}") }),
+            );
+            blocks.push(serde_json::json!({
+                "type": "document",
+                "source": { "type": "base64", "media_type": "application/pdf", "data": data },
+            }));
         } else if let Some(text) = (size <= MAX_TEXT)
             .then(|| std::fs::read_to_string(path).ok())
             .flatten()
@@ -130,6 +146,11 @@ fn content(request: &Request) -> Vec<serde_json::Value> {
         }
     }
     blocks
+}
+
+fn is_pdf(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
 }
 
 fn image_type(path: &Path) -> Option<&'static str> {
@@ -331,18 +352,20 @@ mod tests {
     fn attachments_become_content_blocks() {
         let dir = std::env::temp_dir().join(format!("arnotch-chat-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let (png, txt, bin) = (
+        let (png, txt, bin, pdf) = (
             dir.join("shot.png"),
             dir.join("notes.txt"),
             dir.join("blob.bin"),
+            dir.join("CV.PDF"),
         );
         std::fs::write(&png, [0x89, b'P', b'N', b'G']).unwrap();
         std::fs::write(&txt, "hello").unwrap();
         std::fs::write(&bin, [0xff, 0xfe, 0x00]).unwrap();
+        std::fs::write(&pdf, b"%PDF").unwrap();
 
         let request = Request {
             prompt: "What is this?".into(),
-            attachments: vec![png, txt, bin],
+            attachments: vec![png, txt, bin, pdf],
             ..Default::default()
         };
         let blocks = content(&request);
@@ -364,6 +387,9 @@ mod tests {
                 .unwrap()
                 .starts_with("Attached file (not included)")
         );
+        assert_eq!(blocks[6]["type"], "document");
+        assert_eq!(blocks[6]["source"]["media_type"], "application/pdf");
+        assert_eq!(blocks[6]["source"]["data"], "JVBERg==");
     }
 
     #[test]
