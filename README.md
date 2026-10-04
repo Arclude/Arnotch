@@ -191,9 +191,11 @@ and its coordinates are sent.
 ## Phone
 
 With [KDE Connect](https://kdeconnect.kde.org/) paired, the island announces incoming and missed
-calls and new text messages, and the *Activity* tab shows the phone's battery (with a warning
-below 15%). Messages synced from the phone's history when it connects are not announced. *Phone*
-in the settings turns it off.
+calls and new text messages (with a warning when the phone's battery drops below 15%). The
+*Phone* tab (`arnotchctl open phone`) shows its battery, a **Ring** button that makes a lost phone
+ring even when it is on silent, and the calls and messages since arnotch started. Messages synced
+from the phone's history when it connects are not announced. *Phone* in the settings turns it all
+off.
 
 ## Calendar
 

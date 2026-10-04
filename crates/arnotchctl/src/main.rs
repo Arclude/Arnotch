@@ -26,8 +26,8 @@ use arnotch_core::{AgentPhase, Decision, Event, claude, ipc};
 
 const USAGE: &str = "usage:
   arnotchctl notify <title> [body]
-  arnotchctl open [activity|chat|terminals|shelf]
-  arnotchctl toggle [activity|chat|terminals|shelf]
+  arnotchctl open [activity|chat|terminals|shelf|phone]
+  arnotchctl toggle [activity|chat|terminals|shelf|phone]
   arnotchctl close
   arnotchctl timer <25m|1h30m|90s|10> [label] | cancel
   arnotchctl focus [25m|50] | stop

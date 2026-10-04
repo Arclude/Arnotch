@@ -31,6 +31,7 @@ fn main() {
         "qml/AttachDialog.qml",
         "qml/TimerRow.qml",
         "qml/Spring.qml",
+        "qml/PhoneView.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

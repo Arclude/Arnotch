@@ -116,6 +116,9 @@ fn turkish(text: &str) -> Option<&'static str> {
         "Denied from arnotch" => "arnotch'tan reddedildi",
         // Focus
         "Focusing" => "Odaklanılıyor",
+        // Phone
+        "{} is not in reach" => "{} erişimde değil",
+        "Can't ring the phone" => "Telefon çaldırılamadı",
         _ => return None,
     })
 }
@@ -143,6 +146,7 @@ mod tests {
             "Terminal {} is gone",
             "Sending text to {} is not supported",
             "Switching windows is not supported on {} yet",
+            "{} is not in reach",
             "{} is not a file",
             "Upload failed: {}",
         ] {

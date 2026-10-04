@@ -38,6 +38,17 @@ pub enum PhoneEvent {
     },
 }
 
+/// KDE Connect's name for a call's state as `PhoneEvent::Call` has it. A ringing phone is
+/// "callReceived" in current versions, "ringing" in older ones.
+fn call_state(event: &str) -> String {
+    match event {
+        "callReceived" | "ringing" => "ringing",
+        "missedCall" => "missed_call",
+        other => other,
+    }
+    .to_owned()
+}
+
 /// Calls `on_event` for what the paired phones report. Runs until the session bus goes
 /// away; returns an error where KDE Connect isn't installed.
 pub fn watch(on_event: impl Fn(PhoneEvent)) -> zbus::Result<()> {
@@ -114,14 +125,9 @@ pub fn watch(on_event: impl Fn(PhoneEvent)) -> zbus::Result<()> {
             "callReceived" => {
                 if let Ok((state, number, contact)) = body.deserialize::<(String, String, String)>()
                 {
-                    let state = if state == "missedCall" {
-                        "missed_call".to_owned()
-                    } else {
-                        state
-                    };
                     on_event(PhoneEvent::Call {
                         device: name_of(&id),
-                        state,
+                        state: call_state(&state),
                         number,
                         contact,
                     });
@@ -142,6 +148,27 @@ pub fn watch(on_event: impl Fn(PhoneEvent)) -> zbus::Result<()> {
             _ => {}
         }
     }
+    Ok(())
+}
+
+/// Makes the paired phone called `device` ring loudly, even when it is on silent, to
+/// find it (KDE Connect's "Find my phone").
+pub fn ring(device: &str) -> anyhow::Result<()> {
+    let conn = Connection::session()?;
+    let id = device_ids(&conn)
+        .into_iter()
+        .find(|id| {
+            device_property::<String>(&conn, id, "name").as_deref() == Some(device)
+                && device_property::<bool>(&conn, id, "isReachable") == Some(true)
+        })
+        .ok_or_else(|| anyhow::anyhow!(crate::i18n::trf("{} is not in reach", &[&device])))?;
+    conn.call_method(
+        Some(SERVICE),
+        format!("{DEVICES}/{id}/findmyphone").as_str(),
+        Some("org.kde.kdeconnect.device.findmyphone"),
+        "ring",
+        &(),
+    )?;
     Ok(())
 }
 
@@ -260,6 +287,14 @@ fn text_message(value: &Value) -> Option<TextMessage> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_call_states() {
+        assert_eq!(call_state("callReceived"), "ringing");
+        assert_eq!(call_state("ringing"), "ringing");
+        assert_eq!(call_state("missedCall"), "missed_call");
+        assert_eq!(call_state("talking"), "talking");
+    }
     use zbus::zvariant::{Array, StructureBuilder};
 
     fn message(body: &str, from: &str, date_ms: i64, kind: i32, read: i32) -> Value<'static> {

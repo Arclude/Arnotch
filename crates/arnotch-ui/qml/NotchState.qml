@@ -97,6 +97,9 @@ QtObject {
 
     // The phone (KDE Connect) in reach: { device, percent, charging }, null when none
     property var phone: null
+    // Its latest calls and messages since arnotch started, newest first:
+    // [{ kind: "call" | "message", state: "ringing" | "talking" | "missed_call", who, body, at }]
+    property var phoneLog: []
     // Main binds this to the setting.
     property bool phoneAlerts: true
 
@@ -513,19 +516,46 @@ QtObject {
             phone = null
             return
         }
+        logPhone(ev)
         if (!phoneAlerts)
             return
         if (ev.kind === "call") {
             const who = ev.contact || ev.number || qsTr("Unknown number")
+            const ringing = qsTr("📞 Calling: %1").arg(who)
+            if (ev.state === "talking") {
+                // Answered: the ringing note goes away.
+                if (headline === ringing && alertTimer.running) {
+                    alertTimer.stop()
+                    notifying = false
+                }
+                return
+            }
             if (ev.state === "ringing")
-                say(qsTr("📞 Calling: %1").arg(who), ev.device, 30000)
+                say(ringing, ev.device, 30000)
             else if (ev.state !== "missed_call" || !say(qsTr("Missed call: %1").arg(who), ev.device, 15000, true))
-                return // talking: the ringing note just goes away
+                return
             notifying = true
         } else if (ev.kind === "message") {
             if (say(qsTr("💬 %1").arg(ev.from || qsTr("Message")), ev.body, 10000, true))
                 notifying = true
         }
+    }
+
+    // A ringing call is listed once; answering or missing it updates that entry.
+    function logPhone(ev) {
+        const at = Date.now()
+        if (ev.kind === "message") {
+            phoneLog = [{ kind: "message", state: "", who: ev.from || qsTr("Message"), body: ev.body, at: at }]
+                       .concat(phoneLog).slice(0, 30)
+            return
+        }
+        const who = ev.contact || ev.number || qsTr("Unknown number")
+        const last = phoneLog.find(e => e.kind === "call")
+        if (ev.state !== "ringing" && last && last.who === who && last.state === "ringing" && at - last.at < 600000) {
+            phoneLog = phoneLog.map(e => e === last ? Object.assign({}, e, { state: ev.state }) : e)
+            return
+        }
+        phoneLog = [{ kind: "call", state: ev.state, who: who, body: "", at: at }].concat(phoneLog).slice(0, 30)
     }
 
     function handleUsage(ev) {

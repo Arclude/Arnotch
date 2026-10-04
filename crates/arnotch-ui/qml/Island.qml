@@ -512,7 +512,7 @@ Window {
                         { id: "chat", label: qsTr("Chat") },
                         { id: "terminals", label: qsTr("Terminals") + "  " + root.notch.terminals.length },
                         { id: "shelf", label: qsTr("Shelf") + (root.notch.shelf.length ? "  " + root.notch.shelf.length : "") }
-                    ]
+                    ].concat(root.settings.phone ? [{ id: "phone", label: qsTr("Phone") + (root.notch.phone ? "  " + root.notch.phone.percent + "%" : "") }] : [])
 
                     Rectangle {
                         id: tabChip
@@ -690,6 +690,14 @@ Window {
                 }
             }
 
+            PhoneView {
+                width: parent.width
+                visible: root.shownTab === "phone"
+                phone: root.notch.phone
+                log: root.notch.phoneLog
+                onRing: device => root.bridge.ringPhone(device)
+            }
+
             ChatView {
                 id: chatView
                 width: parent.width
@@ -779,37 +787,6 @@ Window {
                         color: "#8b909a"
                         font.pixelSize: 12
                     }
-                }
-            }
-
-            // The phone's battery, when it is in reach
-            Row {
-                visible: root.onActivity && root.opened && root.notch.phone !== null && root.settings.phone
-                spacing: 8
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "📱"
-                    font.pixelSize: 13
-                }
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.notch.phone ? root.notch.phone.device : ""
-                    color: "#c9ccd2"
-                    font.pixelSize: 12
-                    font.weight: Font.DemiBold
-                }
-                LevelIndicator {
-                    anchors.verticalCenter: parent.verticalCenter
-                    kind: "battery"
-                    value: root.notch.phone ? root.notch.phone.percent / 100 : 0
-                }
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.notch.phone !== null && root.notch.phone.charging
-                    text: qsTr("charging")
-                    color: "#34c759"
-                    font.pixelSize: 11
                 }
             }
 

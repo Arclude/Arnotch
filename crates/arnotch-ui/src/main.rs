@@ -58,10 +58,7 @@ fn main() -> anyhow::Result<()> {
     std::thread::Builder::new()
         .name("notch-phone".into())
         .spawn(|| {
-            let events = bridge::event_bus();
-            if let Err(err) =
-                arnotch_core::phone::watch(|event| _ = events.send(Event::Phone(event)))
-            {
+            if let Err(err) = arnotch_core::phone::watch(bridge::publish_phone) {
                 tracing::info!("no phone (KDE Connect): {err:#}");
             }
         })?;

@@ -123,6 +123,11 @@ pub mod qobject {
         #[cxx_name = "setDoNotDisturb"]
         fn set_do_not_disturb(self: &NotchBridge, on: bool);
 
+        /// Makes the phone called `device` ring, to find it.
+        #[qinvokable]
+        #[cxx_name = "ringPhone"]
+        fn ring_phone(self: &NotchBridge, device: &QString);
+
         /// Plays a sound of the desktop's sound theme, e.g. "alarm-clock-elapsed".
         #[qinvokable]
         #[cxx_name = "playSound"]
@@ -215,6 +220,18 @@ static JOBS: Mutex<Option<Event>> = Mutex::new(None);
 pub fn publish_jobs(jobs: Vec<arnotch_core::jobs::Job>) {
     let event = Event::Jobs { jobs };
     *JOBS.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
+
+/// The phone's latest battery state (or that it went away), likewise.
+static PHONE: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_phone(event: arnotch_core::phone::PhoneEvent) {
+    use arnotch_core::phone::PhoneEvent;
+    let event = Event::Phone(event);
+    if let Event::Phone(PhoneEvent::Battery { .. } | PhoneEvent::Gone { .. }) = event {
+        *PHONE.lock().unwrap() = Some(event.clone());
+    }
     _ = event_bus().send(event);
 }
 
@@ -503,6 +520,18 @@ impl qobject::NotchBridge {
         }
     }
 
+    pub fn ring_phone(&self, device: &QString) {
+        let device = device.to_string();
+        std::thread::spawn(move || {
+            if let Err(err) = arnotch_core::phone::ring(&device) {
+                _ = event_bus().send(Event::Notify {
+                    title: tr("Can't ring the phone").to_owned(),
+                    body: format!("{err:#}"),
+                });
+            }
+        });
+    }
+
     pub fn play_sound(&self, name: &QString) {
         arnotch_core::system::play_sound(&name.to_string());
     }
@@ -575,6 +604,7 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
             CALENDAR.lock().unwrap().clone(),
             WEATHER.lock().unwrap().clone(),
             JOBS.lock().unwrap().clone(),
+            PHONE.lock().unwrap().clone(),
         ];
         for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));
