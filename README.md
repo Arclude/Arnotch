@@ -135,13 +135,90 @@ conversation continues until you start a new one (+). Attach files with 📎 or 
 chat*): images go to Claude as images, PDFs as documents it reads page by page (up to 20 MB),
 text files with their contents. In the settings, Claude
 can be allowed to search the web (on by default) and to read files on this computer (off); both
-are read-only. No MCP servers and none of your Claude Code settings or hooks are used. The answer is streamed as it is
+are read-only. Claude can also change files (on by default): each change waits for your Allow
+in the island, which shows the diff, and once made the chat shows it under the answer (▾ folds
+it). None of your Claude Code settings, hooks or MCP servers are used. The answer is streamed as it is
 written; ■ stops it. Set `ARNOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
 
 On KDE Plasma, `contrib/install.sh` binds **Meta+Space** to open and close the chat (a custom
 shortcut named *arnotch: Chat*, which you can change in System Settings › Shortcuts). Elsewhere,
 bind `arnotchctl toggle chat` to a key. An answer that finishes while the chat is closed shows up
 as a short note in the island.
+
+### Choosing the model
+
+Each message goes to the model that suits it, with as much thinking (*Model* in the settings:
+*Automatic*, or always Haiku, Sonnet or Opus). Commands and small talk ("open Spotify", "turn it
+down") go to Haiku; questions, research, summaries and attached images or PDFs to Sonnet; code,
+debugging, analysis, long questions and attached source files to Opus, with high effort. A
+short follow-up ("go on") stays with the conversation's model, and one saying the last answer
+didn't work ("that's wrong", "olmadı") goes a model up. The model is shown under the answer.
+
+An answer that didn't get the job done is tried again, in the same conversation, a model up:
+when the last command Claude ran failed, or when the answer ends saying it couldn't (shown as
+*Haiku → Sonnet*). Opus gets no second try.
+
+**Claude Code in terminals.** With *Also for Claude Code in terminals* on, the
+`UserPromptSubmit` hook (`contrib/install.sh --hooks`) routes the prompts you type to Claude
+Code the same way. Hooks can't change a session's model, so a prompt for another model is held
+back, arnotch types `/model …` (answering Claude Code's *Switch model?*) and `/effort …` into the
+terminal, and then the prompt again. Switching drops the prompt cache, so a session goes up to a
+stronger model at once but down only while its context is small (under 60k tokens) or after
+three light prompts in a row; prompts of several lines, pasted images and `/` commands go
+through as they are. `/model` and `/effort` also save themselves as the default of new
+sessions; arnotch puts your own defaults back. It needs a terminal arnotch can type into (see
+[Terminals](#terminals)).
+
+### Notes in Obsidian
+
+With an Obsidian vault set in the settings (*Notes*), Claude writes down what it researches on
+the web as a short note in the vault's `Araştırmalar` folder (date, topic, answer, sources),
+through [MCPVault](https://github.com/bitbonsai/mcpvault) (`npx @bitbonsai/mcpvault`, so it
+needs Node.js); Obsidian needs no plugin.
+
+### Asking by voice
+
+🎙 in the chat, or **Meta+Shift+Space** (set by `contrib/install.sh`; `arnotchctl listen` elsewhere),
+listens to the microphone; the face's halo follows your voice. A pause of a second and a half,
+a click or the shortcut again sends the question, × forgets it. Speech is turned into text on
+this computer with [whisper.cpp](https://github.com/ggerganov/whisper.cpp), in whatever
+language you speak. It needs `whisper-cli` and a model:
+
+```sh
+sudo pacman -S whisper-cpp     # or your distribution's whisper.cpp
+arnotchctl voice-model         # small (466 MB); also: large-v3-turbo, medium, base, tiny
+```
+
+The best model downloaded is used (`~/.local/share/arnotch/whisper`), or the file
+`ARNOTCH_WHISPER_MODEL` names. small mishears Turkish now and then ("kıs" as "kız");
+large-v3-turbo doesn't, but takes some 5 seconds a question on a CPU. With a graphics card,
+install whisper.cpp's GPU backend (`sudo pacman -S ggml-vulkan`; `ggml-cuda` for NVIDIA's
+own) and `arnotchctl voice-model large-v3-turbo-q5_0` (574 MB): it answers in under a second.
+
+### Waking it by name
+
+With *Wake word* on in the settings, saying "Claude" (or the name you set) starts listening
+for a question after a tone; "Claude, what's the weather?" asks right away. The microphone
+stays on (arnotch shows in the privacy dots); short bursts of speech are turned into text with
+the quickest model downloaded (`arnotchctl voice-model base`, 142 MB; `ARNOTCH_WAKE_MODEL`
+names another), and long talk is skipped unheard. The name is compared by how it sounds, as
+whisper spells a made-up word many ways; a sentence starting with a word that sounds alike
+("Kalot…") may wake it too; a name of two or more syllables is heard more reliably than a short one. It doesn't listen while arnotch listens for a question or speaks.
+
+### Answers read aloud
+
+Answers to questions asked by voice are read aloud as Claude writes them, a sentence at a time,
+while the face's mouth moves (*Read aloud* in the settings: also every answer, or never). 🔇,
+■, a new question or listening again stops it. Code blocks, link addresses and emoji are left
+out. Speech is made on this computer with [Piper](https://github.com/rhasspy/piper):
+
+```sh
+arnotchctl speech-voice                    # Piper and a voice in your language (tr_TR-dfki-medium, en_US-lessac-medium)
+arnotchctl speech-voice en_GB-alba-medium  # any voice of https://huggingface.co/rhasspy/piper-voices
+```
+
+A voice in your language is preferred; `ARNOTCH_PIPER_VOICE` names another, `ARNOTCH_PIPER` the
+program.
 
 ## Indicators
 
@@ -172,13 +249,36 @@ finishing a turn or a chat answer. The break starts with what came in meanwhile.
 Claude asking for permission and a low battery still come through. *Hold notifications while
 focusing* in the settings turns that off.
 
-## Downloads
+## Downloads and progress
 
 Browser downloads (with Plasma Browser Integration), copies and moves in Dolphin and other KDE
-apps' transfers show as a thin bar along the bottom of the closed island, and with their file,
-progress and speed in the *Activity* tab. A transfer that took more than a few seconds says so
-when it finishes. arnotch reads them the way Plasma shows them in its notifications, by
-watching the session bus (as `dbus-monitor` does), so it needs KDE Plasma.
+apps' transfers take over the closed island while they run: a ring filling up, the file's name
+and the percentage (with several, the first one and how many more, and their progress
+together). The *Activity* tab lists each with how much is done, the speed and the time left. A
+finished download stays a few seconds with *Open* and *Show in folder*. arnotch reads them the
+way Plasma shows them in its notifications, by watching the session bus (as `dbus-monitor`
+does), so it needs KDE Plasma.
+
+Scripts can show their own progress the same way:
+
+```sh
+arnotchctl progress backup 40 "Backing up" "photos/2026"   # id, percent, title, detail
+arnotchctl progress backup busy                             # no percentage: a turning ring
+arnotchctl progress backup done                             # or: fail
+rsync -a --info=progress2 src/ dst/ | arnotchctl progress backup - "Backing up"
+```
+
+With `-`, arnotchctl passes its input through and follows the last percentage in it (curl, rsync,
+pv, ...), and is done when the input ends. A script that stops reporting is forgotten after 10
+minutes.
+
+## Microphone and camera
+
+While an app uses the microphone, a camera or records the screen, an orange, green or purple
+dot sits on the face, as on a phone; the *Activity* tab names the apps. PipeWire tells about its
+streams (`pw-dump --monitor`), and apps that open a camera themselves (`/dev/video*`) are found
+through inotify and `/proc`, so nothing is polled. It can be turned off in the settings
+(*Privacy*).
 
 ## Weather
 
@@ -243,6 +343,11 @@ Claude Code doesn't cut it off sooner. Scripts can answer with
 `arnotchctl send '{"type":"answer","decision":"allow","answers":{"Which color?":"Blue"}}'`. `arnotchctl answer allow|deny|ask` answers the latest request, which is
 handy on a global shortcut. Without an answer within 45 seconds (`ARNOTCH_PERMISSION_TIMEOUT`), or
 when arnotch is not running, Claude Code simply asks in the terminal as usual.
+
+Claude Code shows its own prompt in the terminal at the same time, and doesn't tell the hook
+when you answer there. arnotch takes the session carrying on as the answer: the tool's result,
+the agent's next tool, a new prompt or the end of the turn closes the request in the island.
+(An allowed command that runs a long time keeps it up until it finishes.)
 
 ## License
 

@@ -17,8 +17,19 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::event::{AgentPhase, Event, Reply};
 
-/// Permission requests waiting for the user, by request id, with when they arrived.
-type Pending = HashMap<String, (Instant, oneshot::Sender<Reply>)>;
+/// A permission request waiting for the user.
+struct Waiting {
+    arrived: Instant,
+    session_id: String,
+    agent_id: String,
+    /// The tool asking, and its call's id when Claude Code sends one (empty otherwise).
+    tool: String,
+    tool_use_id: String,
+    sender: oneshot::Sender<Reply>,
+}
+
+/// Permission requests waiting for the user, by request id.
+type Pending = HashMap<String, Waiting>;
 static PENDING: LazyLock<Mutex<Pending>> = LazyLock::new(Default::default);
 
 /// `$XDG_RUNTIME_DIR/arnotch.sock`, falling back to `/tmp/arnotch-$UID.sock`.
@@ -69,7 +80,7 @@ pub fn request(event: &Event, timeout: Duration) -> std::io::Result<Option<Reply
 /// (answered elsewhere or abandoned by its client).
 pub fn answer(request_id: &str, reply: Reply) -> bool {
     let pending = PENDING.lock().unwrap().remove(request_id);
-    pending.is_some_and(|(_, sender)| sender.send(reply).is_ok())
+    pending.is_some_and(|waiting| waiting.sender.send(reply).is_ok())
 }
 
 /// Answers the newest pending request, e.g. from a keyboard shortcut.
@@ -78,7 +89,7 @@ pub fn answer_latest(reply: Reply) -> bool {
         let pending = PENDING.lock().unwrap();
         pending
             .iter()
-            .max_by_key(|(_, (at, _))| *at)
+            .max_by_key(|(_, waiting)| waiting.arrived)
             .map(|(id, _)| id.clone())
     };
     latest.is_some_and(|id| answer(&id, reply))
@@ -120,6 +131,7 @@ async fn handle_client(stream: UnixStream, events: broadcast::Sender<Event>) {
             Ok(Some(line)) if line.trim().is_empty() => {}
             Ok(Some(line)) => match serde_json::from_str::<Event>(&line) {
                 Ok(event) => {
+                    settle(&event);
                     if let Some(request_id) = permission_id(&event) {
                         let decision =
                             await_decision(request_id.clone(), event, &events, &mut lines).await;
@@ -148,6 +160,56 @@ async fn handle_client(stream: UnixStream, events: broadcast::Sender<Event>) {
     }
 }
 
+/// Claude Code shows its own prompt beside the island's, and doesn't tell the hook
+/// when the user answers there: the session carrying on means the answer was given.
+/// Settled requests are dropped, which closes them in the island and lets their hook
+/// exit without an answer.
+fn settle(event: &Event) {
+    let Event::Agent {
+        session_id,
+        tool_use_id,
+        agent_id,
+        phase,
+        ..
+    } = event
+    else {
+        return;
+    };
+    let new_request = permission_id(event);
+    PENDING.lock().unwrap().retain(|request_id, waiting| {
+        if waiting.session_id != *session_id {
+            return true;
+        }
+        let answered = match phase {
+            // A new prompt, the end of the turn or of the session.
+            AgentPhase::Started { .. } | AgentPhase::Done | AgentPhase::Ended => true,
+            // The tool ran (or failed): it was allowed. Without the call's id, the same
+            // agent's next result of that tool tells.
+            AgentPhase::ToolResult { tool, .. } => {
+                if waiting.tool_use_id.is_empty() {
+                    waiting.agent_id == *agent_id && waiting.tool == *tool
+                } else {
+                    waiting.tool_use_id == *tool_use_id
+                }
+            }
+            // Claude Code shows one prompt at a time.
+            AgentPhase::Permission { .. } => new_request.as_ref() != Some(request_id),
+            // The same agent moved on to its next tool. Tools started together come
+            // within moments of each other, so only a later one counts.
+            AgentPhase::Tool { .. } => {
+                waiting.agent_id == *agent_id
+                    && *tool_use_id != waiting.tool_use_id
+                    && waiting.arrived.elapsed() > Duration::from_secs(2)
+            }
+            AgentPhase::Waiting { .. } => false,
+        };
+        if answered {
+            tracing::info!("permission request {request_id} was answered in the terminal");
+        }
+        !answered
+    });
+}
+
 fn permission_id(event: &Event) -> Option<String> {
     match event {
         Event::Agent {
@@ -166,10 +228,32 @@ async fn await_decision(
     lines: &mut tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
 ) -> Option<Reply> {
     let (sender, receiver) = oneshot::channel();
-    PENDING
-        .lock()
-        .unwrap()
-        .insert(request_id.clone(), (Instant::now(), sender));
+    let (session_id, agent_id, tool, tool_use_id) = match &event {
+        Event::Agent {
+            session_id,
+            agent_id,
+            tool_use_id,
+            phase: AgentPhase::Permission { tool, .. },
+            ..
+        } => (
+            session_id.clone(),
+            agent_id.clone(),
+            tool.clone(),
+            tool_use_id.clone(),
+        ),
+        _ => Default::default(),
+    };
+    PENDING.lock().unwrap().insert(
+        request_id.clone(),
+        Waiting {
+            arrived: Instant::now(),
+            session_id,
+            agent_id,
+            tool,
+            tool_use_id,
+            sender,
+        },
+    );
     _ = events.send(event);
 
     let decision = tokio::select! {
@@ -179,4 +263,108 @@ async fn await_decision(
     };
     PENDING.lock().unwrap().remove(&request_id);
     decision
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agent(session: &str, tool_use_id: &str, phase: AgentPhase) -> Event {
+        Event::Agent {
+            session_id: session.into(),
+            project: "p".into(),
+            cwd: String::new(),
+            tool_use_id: tool_use_id.into(),
+            agent_id: String::new(),
+            phase,
+        }
+    }
+
+    fn wait(request_id: &str, session: &str, age: Duration) -> oneshot::Receiver<Reply> {
+        wait_for(request_id, session, age, request_id)
+    }
+
+    /// A request for Bash; `tool_use_id` may be empty, as some Claude Code versions send none.
+    fn wait_for(
+        request_id: &str,
+        session: &str,
+        age: Duration,
+        tool_use_id: &str,
+    ) -> oneshot::Receiver<Reply> {
+        let (sender, receiver) = oneshot::channel();
+        PENDING.lock().unwrap().insert(
+            request_id.into(),
+            Waiting {
+                arrived: Instant::now() - age,
+                session_id: session.into(),
+                agent_id: String::new(),
+                tool: "Bash".into(),
+                tool_use_id: tool_use_id.into(),
+                sender,
+            },
+        );
+        receiver
+    }
+
+    fn pending(request_id: &str) -> bool {
+        PENDING.lock().unwrap().contains_key(request_id)
+    }
+
+    #[test]
+    fn requests_answered_in_the_terminal_are_settled() {
+        let tool = || AgentPhase::Tool {
+            tool: "Read".into(),
+            detail: String::new(),
+            diff: None,
+        };
+        let result = || AgentPhase::ToolResult {
+            tool: "Bash".into(),
+            ok: true,
+            output: Vec::new(),
+        };
+
+        let _a = wait("t-a", "s1", Duration::ZERO);
+        let _other = wait("t-other", "s2", Duration::ZERO);
+        // Another tool's result, or a tool started alongside: still waiting.
+        settle(&agent("s1", "t-b", result()));
+        settle(&agent("s1", "t-b", tool()));
+        assert!(pending("t-a"));
+        // Its own result: allowed in the terminal.
+        settle(&agent("s1", "t-a", result()));
+        assert!(!pending("t-a"));
+
+        // A later tool of the same agent means the request was answered.
+        let _c = wait("t-c", "s1", Duration::from_secs(5));
+        settle(&agent("s1", "t-d", tool()));
+        assert!(!pending("t-c"));
+
+        let mut e = wait("t-e", "s1", Duration::ZERO);
+        settle(&agent("s1", "", AgentPhase::Done));
+        assert!(!pending("t-e"));
+        // The hook's wait ends without an answer.
+        assert!(e.try_recv().is_err());
+
+        // Without a tool call id, the tool's next result settles it, not another tool's.
+        let _f = wait_for("s1-123", "s1", Duration::ZERO, "");
+        let read_result = AgentPhase::ToolResult {
+            tool: "Read".into(),
+            ok: true,
+            output: Vec::new(),
+        };
+        settle(&agent("s1", "t-g", read_result));
+        assert!(pending("s1-123"));
+        settle(&agent("s1", "t-h", result()));
+        assert!(!pending("s1-123"));
+
+        // Other sessions are left alone.
+        assert!(pending("t-other"));
+        settle(&agent(
+            "s2",
+            "",
+            AgentPhase::Started {
+                prompt: String::new(),
+            },
+        ));
+        assert!(!pending("t-other"));
+    }
 }

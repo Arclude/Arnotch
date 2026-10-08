@@ -218,6 +218,130 @@ ApplicationWindow {
                         checked: win.settings.chatFiles
                         onToggled: win.settings.chatFiles = checked
                     }
+                    Switch {
+                        text: qsTr("Claude can open apps and control the computer")
+                        checked: win.settings.computerControl
+                        onToggled: win.settings.computerControl = checked
+                    }
+                    Label {
+                        leftPadding: 8
+                        wrapMode: Text.WordWrap
+                        width: 320
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        visible: win.settings.computerControl
+                        text: qsTr("Opening apps, music, volume and brightness happen right away; other commands wait for your Allow in the island.")
+                    }
+                    Switch {
+                        text: qsTr("Claude can change files")
+                        checked: win.settings.chatEdit
+                        onToggled: win.settings.chatEdit = checked
+                    }
+                    Label {
+                        leftPadding: 8
+                        wrapMode: Text.WordWrap
+                        width: 320
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        visible: win.settings.chatEdit
+                        text: qsTr("Each change waits for your Allow in the island; the chat shows what changed.")
+                    }
+                }
+
+                Label { text: qsTr("Model") }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    ComboBox {
+                        Layout.fillWidth: true
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("Automatic, for each message"), value: "auto" },
+                            { text: "Haiku", value: "haiku" },
+                            { text: "Sonnet", value: "sonnet" },
+                            { text: "Opus", value: "opus" }
+                        ]
+                        Component.onCompleted: currentIndex = indexOfValue(win.settings.chatModel)
+                        onActivated: win.settings.chatModel = currentValue
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        visible: win.settings.chatModel === "auto"
+                        text: qsTr("Commands and small talk go to Haiku, questions and research to Sonnet, code and analysis to Opus.")
+                    }
+                    Switch {
+                        text: qsTr("Also for Claude Code in terminals")
+                        checked: win.settings.terminalModel === "auto"
+                        onToggled: win.settings.terminalModel = checked ? "auto" : "off"
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        visible: win.settings.terminalModel === "auto"
+                        text: qsTr("A prompt for another model is held back, the session switches (/model, /effort) and the prompt is typed again. Sessions go up at once, but down only while short or after three light prompts: switching drops the cache. Needs a terminal arnotch can type into.")
+                    }
+                }
+
+                Label { text: qsTr("Notes") }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    TextField {
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Obsidian vault folder")
+                        text: win.settings.obsidianVault
+                        onEditingFinished: win.settings.obsidianVault = text.trim()
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        text: qsTr("Claude writes what it researches there, in Araştırmalar (needs Node.js for npx).")
+                    }
+                }
+
+                Label { text: qsTr("Read aloud") }
+                ComboBox {
+                    Layout.fillWidth: true
+                    textRole: "text"
+                    valueRole: "value"
+                    model: [
+                        { text: qsTr("Answers to questions asked by voice"), value: "voice" },
+                        { text: qsTr("Every answer"), value: "always" },
+                        { text: qsTr("Off"), value: "off" }
+                    ]
+                    Component.onCompleted: currentIndex = indexOfValue(win.settings.speakAnswers)
+                    onActivated: win.settings.speakAnswers = currentValue
+                }
+
+                Label { text: qsTr("Wake word") }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Switch {
+                        text: qsTr("Wake arnotch by saying its name")
+                        checked: win.settings.wakeOn
+                        onToggled: win.settings.wakeOn = checked
+                    }
+                    TextField {
+                        Layout.fillWidth: true
+                        visible: win.settings.wakeOn
+                        placeholderText: "Claude"
+                        text: win.settings.wakeWord
+                        onEditingFinished: win.settings.wakeWord = text.trim() || "Claude"
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        visible: win.settings.wakeOn
+                        text: qsTr("Say the name, then your question after the tone, or both at once (\"Claude, what's the weather?\"). The microphone stays on, so arnotch shows in the privacy dots; what it hears is turned into text on this computer and nothing is kept. Needs a speech model; base is the quickest: arnotchctl voice-model base")
+                    }
                 }
 
                 Label { text: qsTr("Phone") }
@@ -232,6 +356,13 @@ ApplicationWindow {
                     text: qsTr("Show the playing song in the closed island")
                     checked: win.settings.compactMedia
                     onToggled: win.settings.compactMedia = checked
+                }
+
+                Label { text: qsTr("Privacy") }
+                Switch {
+                    text: qsTr("Show when apps use the microphone, camera or screen")
+                    checked: win.settings.privacyDots
+                    onToggled: win.settings.privacyDots = checked
                 }
 
                 Label { text: qsTr("Indicators") }

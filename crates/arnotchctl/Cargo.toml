@@ -6,5 +6,6 @@ license.workspace = true
 
 [dependencies]
 arnotch-core.workspace = true
-serde_json.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 anyhow.workspace = true

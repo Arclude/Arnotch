@@ -17,6 +17,8 @@ shortcut_id='array:string:arnotch-chat.desktop,_launch,arnotch: Chat,arnotch: Ch
 meta_space=268435488
 shot_id='array:string:arnotch-screenshot.desktop,_launch,arnotch: Screenshot,arnotch: Screenshot'
 meta_shift_c=301989955
+voice_id='array:string:arnotch-voice.desktop,_launch,arnotch: Ask by voice,arnotch: Ask by voice'
+meta_shift_space=301989920
 
 # Claude Code's status line goes through arnotchctl, which passes the session's cost and the
 # plan's rate limits to arnotch and then runs the status line the user had (saved aside).
@@ -58,7 +60,8 @@ case "${1:-}" in
     --uninstall)
         systemctl --user disable --now arnotch.service 2>/dev/null || true
         rm -f "$units/arnotch.service" "$bin/arnotch" "$bin/arnotchctl" "$apps/arnotch-chat.desktop" \
-            "$apps/arnotch-screenshot.desktop"
+            "$apps/arnotch-screenshot.desktop" "$apps/arnotch-voice.desktop"
+        kglobalaccel unregister string:arnotch-voice.desktop string:_launch >/dev/null 2>&1 || true
         kglobalaccel unregister string:arnotch-screenshot.desktop string:_launch >/dev/null 2>&1 || true
         kglobalaccel unregister string:arnotch-chat.desktop string:_launch >/dev/null 2>&1 || true
         statusline restore
@@ -204,6 +207,35 @@ DESKTOP
         echo "Screenshot shortcut: Meta+Shift+C"
     else
         echo "Screenshot shortcut: Meta+Shift+C is taken; pick one in System Settings › Shortcuts (arnotch: Screenshot)"
+    fi
+
+    # Meta+Shift+Space: ask Claude by voice; again (or a pause) sends the question.
+    cat >"$apps/arnotch-voice.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=arnotch: Ask by voice
+Name[tr]=arnotch: Sesle sor
+Exec=$bin/arnotchctl listen
+Icon=audio-input-microphone
+NoDisplay=true
+StartupNotify=false
+X-KDE-GlobalAccel-CommandShortcut=true
+DESKTOP
+    kbuildsycoca6 >/dev/null 2>&1 || true
+    kglobalaccel doRegister "$voice_id" >/dev/null
+    if kglobalaccel shortcut "$voice_id" | grep -q int32; then
+        echo "Voice shortcut: kept as set in System Settings"
+    elif kglobalaccel isGlobalShortcutAvailable int32:$meta_shift_space string:arnotch-voice.desktop | grep -q true; then
+        kglobalaccel setShortcut "$voice_id" array:int32:$meta_shift_space uint32:6 >/dev/null
+        echo "Voice shortcut: Meta+Shift+Space"
+    else
+        echo "Voice shortcut: Meta+Shift+Space is taken; pick one in System Settings › Shortcuts (arnotch: Ask by voice)"
+    fi
+    if ! command -v whisper-cli >/dev/null; then
+        echo "Asking by voice needs whisper.cpp: sudo pacman -S whisper-cpp (or your distribution's whisper-cpp)"
+    fi
+    if [ ! -d "${XDG_DATA_HOME:-$HOME/.local/share}/arnotch/whisper" ]; then
+        echo "...and a speech model: arnotchctl voice-model"
     fi
 fi
 

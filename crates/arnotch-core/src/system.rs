@@ -223,6 +223,52 @@ impl Drop for NotificationInhibitor {
     }
 }
 
+/// Shows a desktop notification that goes away on its own after `timeout_ms` and isn't
+/// kept in the history. A newer one with the same `tag` replaces it.
+pub fn notify(
+    tag: &str,
+    summary: &str,
+    body: &str,
+    icon: &str,
+    timeout_ms: i32,
+) -> zbus::Result<()> {
+    static SHOWN: std::sync::Mutex<Option<HashMap<String, u32>>> = std::sync::Mutex::new(None);
+    let replaces = SHOWN
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|shown| shown.get(tag).copied())
+        .unwrap_or(0);
+    let mut hints: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+    hints.insert("transient", true.into());
+    // Its icon and settings in the desktop's notification settings.
+    hints.insert("desktop-entry", "arnotch-voice".into());
+    let conn = Connection::session()?;
+    let reply = conn.call_method(
+        Some("org.freedesktop.Notifications"),
+        "/org/freedesktop/Notifications",
+        Some("org.freedesktop.Notifications"),
+        "Notify",
+        &(
+            "arnotch",
+            replaces,
+            icon,
+            summary,
+            body,
+            Vec::<&str>::new(),
+            hints,
+            timeout_ms,
+        ),
+    )?;
+    let id: u32 = reply.body().deserialize()?;
+    SHOWN
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashMap::new)
+        .insert(tag.to_owned(), id);
+    Ok(())
+}
+
 /// A duration such as "25m", "1h30m", "90s" or "10" (minutes), in seconds.
 pub fn parse_duration(text: &str) -> Option<u64> {
     let text = text.trim().to_ascii_lowercase();
@@ -252,12 +298,45 @@ pub fn parse_duration(text: &str) -> Option<u64> {
 /// Plays a sound of the desktop's sound theme, such as "alarm-clock-elapsed", without
 /// waiting for it.
 pub fn play_sound(name: &str) {
-    let themed = Command::new("canberra-gtk-play").args(["-i", name]).spawn();
-    if themed.is_err() {
-        _ = Command::new("paplay")
-            .arg(format!("/usr/share/sounds/freedesktop/stereo/{name}.oga"))
-            .spawn();
+    let player = Command::new("canberra-gtk-play")
+        .args(["-i", name])
+        .spawn()
+        .or_else(|_| {
+            Command::new("paplay")
+                .arg(format!("/usr/share/sounds/freedesktop/stereo/{name}.oga"))
+                .spawn()
+        });
+    // Waited for elsewhere, or it stays behind as a zombie process.
+    if let Ok(mut player) = player {
+        std::thread::spawn(move || player.wait());
     }
+}
+
+/// Opens the file manager on the folder of `path`, with the file selected
+/// (the freedesktop FileManager1 interface, which Dolphin and others provide).
+pub fn show_in_folder(path: &str) -> zbus::Result<()> {
+    let url = format!("file://{}", encode_path(path));
+    Connection::session()?.call_method(
+        Some("org.freedesktop.FileManager1"),
+        "/org/freedesktop/FileManager1",
+        Some("org.freedesktop.FileManager1"),
+        "ShowItems",
+        &(vec![url], ""),
+    )?;
+    Ok(())
+}
+
+/// Percent-encodes what a file URL can't hold as is.
+fn encode_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || b"/-_.~".contains(&byte) {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
 }
 
 #[cfg(test)]

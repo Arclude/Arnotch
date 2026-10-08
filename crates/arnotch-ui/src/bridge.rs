@@ -6,10 +6,13 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 
+use arnotch_core::event::VoiceState;
 use arnotch_core::event::{ChatState, UploadState};
 use arnotch_core::i18n::{self, tr};
 use arnotch_core::terminals::{self, Terminal};
-use arnotch_core::{Decision, Event, chat, clipboard, control, focus, ipc, media, share};
+use arnotch_core::{
+    Decision, Event, chat, clipboard, control, focus, ipc, media, route, share, speech, voice,
+};
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
 use tokio::sync::broadcast;
@@ -86,7 +89,8 @@ pub mod qobject {
         fn send_text(self: &NotchBridge, id: &QString, text: &QString);
 
         /// Sends a message to Claude in the island's chat and returns its turn number.
-        /// The answer arrives as `chat` events with that turn.
+        /// The answer arrives as `chat` events with that turn; with `speak`, it is also read
+        /// aloud as it is written (`speech` events tell when).
         #[qinvokable]
         #[cxx_name = "askClaude"]
         fn ask_claude(
@@ -95,7 +99,17 @@ pub mod qobject {
             attachments: &QString,
             web: bool,
             files: bool,
+            control: bool,
+            edit: bool,
+            speak: bool,
+            model: &QString,
+            vault: &QString,
         ) -> u32;
+
+        /// Stops reading the answer aloud.
+        #[qinvokable]
+        #[cxx_name = "stopSpeaking"]
+        fn stop_speaking(self: &NotchBridge);
 
         /// Stops the answer being written.
         #[qinvokable]
@@ -133,6 +147,17 @@ pub mod qobject {
         #[cxx_name = "playSound"]
         fn play_sound(self: &NotchBridge, name: &QString);
 
+        /// Shows a desktop notification for a few seconds; one with the same `tag` replaces it.
+        #[qinvokable]
+        #[cxx_name = "notifyDesktop"]
+        fn notify_desktop(
+            self: &NotchBridge,
+            tag: &QString,
+            summary: &QString,
+            body: &QString,
+            icon: &QString,
+        );
+
         /// Puts text back on the clipboard.
         #[qinvokable]
         #[cxx_name = "copyText"]
@@ -142,6 +167,33 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "newChat"]
         fn new_chat(self: &NotchBridge);
+
+        /// Starts listening for a question to Claude. What was said arrives as `voice`
+        /// events: `listening` with the level, `transcribing`, then `done` with the text.
+        #[qinvokable]
+        #[cxx_name = "startListening"]
+        fn start_listening(self: &NotchBridge);
+
+        /// Done talking: turns what was said into text.
+        #[qinvokable]
+        #[cxx_name = "stopListening"]
+        fn stop_listening(self: &NotchBridge);
+
+        /// Forgets what is being said, or the text it is being turned into.
+        #[qinvokable]
+        #[cxx_name = "cancelListening"]
+        fn cancel_listening(self: &NotchBridge);
+
+        /// Listens for `word` ("Arnotch") on the microphone, and wakes the island when it is
+        /// said (`wake` events); empty stops listening.
+        #[qinvokable]
+        #[cxx_name = "setWakeWord"]
+        fn set_wake_word(self: &NotchBridge, word: &QString);
+
+        /// Opens the file manager on the folder of a file, with the file selected.
+        #[qinvokable]
+        #[cxx_name = "showInFolder"]
+        fn show_in_folder(self: &NotchBridge, path: &QString);
     }
 
     impl cxx_qt::Threading for NotchBridge {}
@@ -170,12 +222,19 @@ pub fn publish_terminals(terminals: Vec<Terminal>) {
     _ = event_bus().send(event);
 }
 
+/// Sent, unseen, when an answer didn't get the job done and a stronger model tries again.
+const RETRY_PROMPT: &str = "Your last answer didn't get it done: the last step failed or \
+you couldn't do it. Try again, another way if need be, and answer briefly without \
+apologizing.";
+
 /// The island's conversation with Claude, shared by every island window.
 struct Chat {
     session_id: String,
     turn: u32,
     /// The `claude` process writing the current answer.
     pid: Option<u32>,
+    /// The model of the last message, which a short follow-up keeps.
+    model: Option<route::Model>,
 }
 
 static CHAT: Mutex<Option<Chat>> = Mutex::new(None);
@@ -186,6 +245,7 @@ fn with_chat<T>(f: impl FnOnce(&mut Chat) -> T) -> T {
         session_id: chat::new_session_id(),
         turn: 0,
         pid: None,
+        model: None,
     }))
 }
 
@@ -233,6 +293,173 @@ pub fn publish_phone(event: arnotch_core::phone::PhoneEvent) {
         *PHONE.lock().unwrap() = Some(event.clone());
     }
     _ = event_bus().send(event);
+}
+
+/// Who uses the microphone, camera and screen, as PipeWire and `/dev/video*` tell.
+static PRIVACY: Mutex<(arnotch_core::privacy::InUse, arnotch_core::privacy::InUse)> = Mutex::new((
+    arnotch_core::privacy::InUse::NONE,
+    arnotch_core::privacy::InUse::NONE,
+));
+/// Their union, replayed to bridges created after it was published.
+static PRIVACY_EVENT: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_pipewire(in_use: arnotch_core::privacy::InUse) {
+    let both = {
+        let mut privacy = PRIVACY.lock().unwrap();
+        privacy.0 = in_use;
+        privacy.0.merge(&privacy.1)
+    };
+    publish_privacy(both);
+}
+
+pub fn publish_cameras(apps: Vec<String>) {
+    let both = {
+        let mut privacy = PRIVACY.lock().unwrap();
+        privacy.1.camera = apps;
+        privacy.0.merge(&privacy.1)
+    };
+    publish_privacy(both);
+}
+
+fn publish_privacy(in_use: arnotch_core::privacy::InUse) {
+    let event = Event::Privacy(in_use);
+    let mut last = PRIVACY_EVENT.lock().unwrap();
+    if last.as_ref() != Some(&event) {
+        *last = Some(event.clone());
+        _ = event_bus().send(event);
+    }
+}
+
+/// The question being listened to: where to send Stop or Cancel, and which one it is
+/// (a cancelled one's late transcript is dropped).
+static LISTENING: Mutex<Option<(u32, std::sync::mpsc::Sender<voice::Control>)>> = Mutex::new(None);
+static LISTEN_ROUND: AtomicU32 = AtomicU32::new(0);
+/// Held while a round's voice event is checked and sent, and while a round is cancelled:
+/// nothing of a cancelled round is sent after its "cancelled".
+static VOICE_EVENTS: Mutex<()> = Mutex::new(());
+
+/// Sends a voice event of the round, unless it was cancelled meanwhile.
+fn send_voice(round: u32, state: VoiceState, level: f32, text: String) {
+    let _sending = VOICE_EVENTS.lock().unwrap();
+    if LISTEN_ROUND.load(Ordering::Relaxed) == round {
+        _ = event_bus().send(Event::Voice { state, level, text });
+    }
+}
+/// A question is being listened to or turned into text.
+static HEARING: AtomicBool = AtomicBool::new(false);
+
+/// Clears `HEARING` when the question is done with, however it ends.
+struct Hearing;
+
+impl Drop for Hearing {
+    fn drop(&mut self) {
+        HEARING.store(false, Ordering::Relaxed);
+    }
+}
+
+/// The wake word listened for, and the switch that stops its listener.
+static WAKE: Mutex<Option<(String, std::sync::Arc<AtomicBool>)>> = Mutex::new(None);
+
+/// Listens for the wake word until `on` is turned off.
+fn listen_for_wake_word(word: String, on: std::sync::Arc<AtomicBool>) {
+    let Some(model) = voice::find_wake_model() else {
+        _ = event_bus().send(Event::Notify {
+            title: tr("Can't listen for the wake word").to_owned(),
+            body: tr("No speech model: run arnotchctl voice-model base").to_owned(),
+        });
+        return;
+    };
+    tracing::info!(
+        "listening for the wake word {word:?} with {}",
+        model.display()
+    );
+    // arnotch doesn't wake itself: not while it listens for a question or speaks.
+    let paused = || HEARING.load(Ordering::Relaxed) || SPEAKING.lock().unwrap().is_some();
+    let mut failures = 0;
+    while on.load(Ordering::Relaxed) {
+        let result = arnotch_core::wake::listen(
+            &word,
+            &model,
+            || on.load(Ordering::Relaxed),
+            paused,
+            |question| _ = event_bus().send(Event::Wake { question }),
+        );
+        let Err(err) = result else { break };
+        // The microphone went away (a headset unplugged...): try again a little later.
+        failures += 1;
+        tracing::warn!("wake word: {err:#}");
+        if failures == 5 {
+            _ = event_bus().send(Event::Notify {
+                title: tr("Can't listen for the wake word").to_owned(),
+                body: format!("{err:#}"),
+            });
+        }
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+}
+
+/// The answer being read aloud: its Piper and pw-play processes.
+static SPEAKING: Mutex<Option<[u32; 2]>> = Mutex::new(None);
+/// Bumped to stop reading: a reader of an earlier round stops at its next sentence.
+static SPEECH_ROUND: AtomicU32 = AtomicU32::new(0);
+
+fn stop_speaking() {
+    SPEECH_ROUND.fetch_add(1, Ordering::Relaxed);
+    if let Some(pids) = SPEAKING.lock().unwrap().take() {
+        speech::silence(pids);
+    }
+}
+
+/// Reads the sentences aloud as they arrive, until they end or reading is stopped, then
+/// says it is done.
+fn speak_answer(turn: u32, sentences: std::sync::mpsc::Receiver<String>) {
+    let speaking = |speaking| _ = event_bus().send(Event::Speech { turn, speaking });
+    let round = SPEECH_ROUND.load(Ordering::Relaxed);
+    let current = || SPEECH_ROUND.load(Ordering::Relaxed) == round;
+    let mut speaker: Option<speech::Speaker> = None;
+    for sentence in sentences {
+        if !current() {
+            break;
+        }
+        if speaker.is_none() {
+            // Piper starts with the first sentence, so a failed answer costs nothing.
+            match speech::Speaker::new() {
+                Ok(started) => {
+                    *SPEAKING.lock().unwrap() = Some(started.pids());
+                    speaking(true);
+                    speaker = Some(started);
+                }
+                Err(err) => {
+                    tracing::warn!("speech: {err:#}");
+                    _ = event_bus().send(Event::Notify {
+                        title: tr("Can't read the answer aloud").to_owned(),
+                        body: format!("{err:#}"),
+                    });
+                    return speaking(false);
+                }
+            }
+        }
+        if let Some(speaker) = speaker.as_mut()
+            && speaker.say(&sentence).is_err()
+        {
+            break;
+        }
+    }
+    let Some(speaker) = speaker else {
+        return speaking(false);
+    };
+    let pids = speaker.pids();
+    if !current() {
+        speech::silence(pids);
+    }
+    speaker.finish();
+    {
+        let mut current = SPEAKING.lock().unwrap();
+        if *current == Some(pids) {
+            *current = None;
+        }
+    }
+    speaking(false);
 }
 
 /// Do Not Disturb while focusing, ended by dropping it.
@@ -411,15 +638,25 @@ impl qobject::NotchBridge {
 
 impl qobject::NotchBridge {
     /// `attachments` holds one path per line; `web` and `files` turn on Claude's
-    /// read-only web and file tools.
+    /// read-only web and file tools, `control` its commands to work the computer, `edit`
+    /// changing files (each change asked about in the island). `model`
+    /// is "auto" (chosen for each message) or the model to use; `vault` the Obsidian vault
+    /// research is written to, empty for none.
     pub fn ask_claude(
         &self,
         prompt: &QString,
         attachments: &QString,
         web: bool,
         files: bool,
+        control: bool,
+        edit: bool,
+        speak: bool,
+        model: &QString,
+        vault: &QString,
     ) -> u32 {
-        let request = chat::Request {
+        // A new question silences the previous answer.
+        stop_speaking();
+        let mut request = chat::Request {
             prompt: prompt.to_string(),
             attachments: attachments
                 .to_string()
@@ -429,38 +666,112 @@ impl qobject::NotchBridge {
                 .collect(),
             web,
             files,
+            control,
+            edit,
+            route: None,
+            vault: Some(vault.to_string())
+                .filter(|v| !v.is_empty())
+                .map(|v| match v.strip_prefix("~/") {
+                    Some(rest) => chat::home().join(rest),
+                    None => PathBuf::from(v),
+                })
+                .filter(|v| v.is_dir()),
         };
         // One answer at a time: a new message replaces the one being written.
-        let (session_id, turn) = with_chat(|chat| {
+        let (session_id, turn, route) = with_chat(|chat| {
             if let Some(pid) = chat.pid.take() {
                 chat::stop(pid);
             }
             chat.turn += 1;
-            (chat.session_id.clone(), chat.turn)
+            let route = route::pick(
+                &model.to_string(),
+                &request.prompt,
+                &request.attachments,
+                chat.model,
+            );
+            chat.model = Some(route.model);
+            (chat.session_id.clone(), chat.turn, route)
         });
+        request.route = Some(route);
         let send = move |state: ChatState, text: String| {
             _ = event_bus().send(Event::Chat { turn, state, text });
         };
+        send(ChatState::Model, route.model.name().to_owned());
+        let reader = speak.then(|| {
+            let (say, said) = std::sync::mpsc::channel::<String>();
+            std::thread::spawn(move || speak_answer(turn, said));
+            say
+        });
 
         std::thread::spawn(move || {
-            let result =
-                chat::ask(&session_id, chat::saved(&session_id), &request).and_then(|answer| {
-                    // Stopped before it started: don't let it run.
-                    let current = with_chat(|chat| {
-                        let current = chat.turn == turn && chat.session_id == session_id;
-                        if current {
-                            chat.pid = Some(answer.pid());
+            let mut request = request;
+            let mut route = route;
+            let result = loop {
+                let mut said = String::new();
+                let attempt =
+                    chat::ask(&session_id, chat::saved(&session_id), &request).and_then(|answer| {
+                        // Stopped before it started: don't let it run.
+                        let current = with_chat(|chat| {
+                            let current = chat.turn == turn && chat.session_id == session_id;
+                            if current {
+                                chat.pid = Some(answer.pid());
+                            }
+                            current
+                        });
+                        if !current {
+                            chat::stop(answer.pid());
                         }
-                        current
+                        let mut sentences = speech::Sentences::default();
+                        let streamed = answer.stream(|piece| match piece {
+                            chat::Piece::Text(text) => {
+                                if let Some(reader) = &reader {
+                                    for sentence in sentences.push(text) {
+                                        _ = reader.send(sentence);
+                                    }
+                                }
+                                said.push_str(text);
+                                send(ChatState::Streaming, text.to_owned())
+                            }
+                            chat::Piece::Tool(name) => send(ChatState::Tool, name.to_owned()),
+                            chat::Piece::Change(diff) => send(
+                                ChatState::Change,
+                                serde_json::to_string(diff).unwrap_or_default(),
+                            ),
+                        });
+                        if let Some(reader) = &reader {
+                            for sentence in sentences.finish() {
+                                _ = reader.send(sentence);
+                            }
+                        }
+                        streamed
                     });
-                    if !current {
-                        chat::stop(answer.pid());
-                    }
-                    answer.stream(|piece| match piece {
-                        chat::Piece::Text(text) => send(ChatState::Streaming, text.to_owned()),
-                        chat::Piece::Tool(name) => send(ChatState::Tool, name.to_owned()),
-                    })
+                let outcome = match attempt {
+                    Ok(outcome) => outcome,
+                    Err(err) => break Err(err),
+                };
+                let current = with_chat(|chat| {
+                    chat.turn == turn && chat.session_id == session_id && chat.pid.is_some()
                 });
+                // It didn't get it done: once more, in the same conversation, a model up.
+                let Some(stronger) =
+                    route::escalate(route, outcome.last_tool_failed, &said).filter(|_| current)
+                else {
+                    break Ok(());
+                };
+                tracing::info!("chat: {} → {}", route.model.name(), stronger.model.name());
+                send(
+                    ChatState::Model,
+                    format!("{} → {}", route.model.name(), stronger.model.name()),
+                );
+                send(ChatState::Streaming, "\n\n".to_owned());
+                with_chat(|chat| chat.model = Some(stronger.model));
+                route = stronger;
+                request.prompt = RETRY_PROMPT.to_owned();
+                request.attachments.clear();
+                request.route = Some(stronger);
+            };
+            // The reader ends once it has said everything sent.
+            drop(reader);
             // Still the current answer, or was it stopped or replaced?
             let current = with_chat(|chat| {
                 let current =
@@ -470,6 +781,9 @@ impl qobject::NotchBridge {
                 }
                 current
             });
+            if !current || result.is_err() {
+                stop_speaking();
+            }
             match result {
                 _ if !current => send(ChatState::Stopped, String::new()),
                 Ok(()) => send(ChatState::Done, String::new()),
@@ -536,6 +850,20 @@ impl qobject::NotchBridge {
         arnotch_core::system::play_sound(&name.to_string());
     }
 
+    pub fn notify_desktop(&self, tag: &QString, summary: &QString, body: &QString, icon: &QString) {
+        let (tag, summary, body, icon) = (
+            tag.to_string(),
+            summary.to_string(),
+            body.to_string(),
+            icon.to_string(),
+        );
+        std::thread::spawn(move || {
+            if let Err(err) = arnotch_core::system::notify(&tag, &summary, &body, &icon, 4000) {
+                tracing::warn!("cannot notify: {err:#}");
+            }
+        });
+    }
+
     pub fn copy_text(&self, text: &QString) {
         let text = text.to_string();
         std::thread::spawn(move || {
@@ -545,7 +873,12 @@ impl qobject::NotchBridge {
         });
     }
 
+    pub fn stop_speaking(&self) {
+        stop_speaking();
+    }
+
     pub fn stop_chat(&self) {
+        stop_speaking();
         with_chat(|chat| {
             if let Some(pid) = chat.pid.take() {
                 chat::stop(pid);
@@ -555,12 +888,111 @@ impl qobject::NotchBridge {
         });
     }
 
+    pub fn start_listening(&self) {
+        // Claude stops talking while the user does.
+        stop_speaking();
+        let (control, controls) = std::sync::mpsc::channel();
+        let round = {
+            let mut listening = LISTENING.lock().unwrap();
+            if listening.is_some() {
+                return;
+            }
+            let round = LISTEN_ROUND.fetch_add(1, Ordering::Relaxed) + 1;
+            *listening = Some((round, control));
+            round
+        };
+        // Only while still this round: not cancelled meanwhile.
+        let send = move |state: VoiceState, level: f32, text: String| {
+            send_voice(round, state, level, text)
+        };
+        send(VoiceState::Listening, 0.0, String::new());
+        HEARING.store(true, Ordering::Relaxed);
+
+        std::thread::spawn(move || {
+            let _hearing = Hearing;
+            let recorded = voice::record(&controls, |level| {
+                send(VoiceState::Listening, level, String::new())
+            });
+            // From here on, Stop has nothing more to stop; Cancel still drops the text.
+            LISTENING.lock().unwrap().take();
+            // A cancelled round says nothing more: cancelling said it.
+            let samples = match recorded {
+                Ok(Some(samples)) => samples,
+                Ok(None) => return send(VoiceState::Cancelled, 0.0, String::new()),
+                Err(err) => return send(VoiceState::Failed, 0.0, format!("{err:#}")),
+            };
+            send(VoiceState::Transcribing, 0.0, String::new());
+            match voice::transcribe(&samples) {
+                Ok(text) if text.is_empty() => send(VoiceState::Cancelled, 0.0, String::new()),
+                Ok(text) => send(VoiceState::Done, 0.0, text),
+                Err(err) => {
+                    tracing::warn!("voice: {err:#}");
+                    send(VoiceState::Failed, 0.0, format!("{err:#}"));
+                }
+            }
+        });
+    }
+
+    pub fn stop_listening(&self) {
+        if let Some((_, control)) = LISTENING.lock().unwrap().as_ref() {
+            _ = control.send(voice::Control::Stop);
+        }
+    }
+
+    pub fn cancel_listening(&self) {
+        if let Some((_, control)) = LISTENING.lock().unwrap().take() {
+            _ = control.send(voice::Control::Cancel);
+        }
+        // A transcript on its way is dropped too. "cancelled" comes after the round's last
+        // level, which would otherwise show the island listening again, and for good.
+        let _sending = VOICE_EVENTS.lock().unwrap();
+        LISTEN_ROUND.fetch_add(1, Ordering::Relaxed);
+        if HEARING.load(Ordering::Relaxed) {
+            _ = event_bus().send(Event::Voice {
+                state: VoiceState::Cancelled,
+                level: 0.0,
+                text: String::new(),
+            });
+        }
+    }
+
+    pub fn set_wake_word(&self, word: &QString) {
+        let word = word.to_string().trim().to_owned();
+        let mut wake = WAKE.lock().unwrap();
+        if wake
+            .as_ref()
+            .is_some_and(|(listening, _)| *listening == word)
+        {
+            return;
+        }
+        if let Some((_, on)) = wake.take() {
+            on.store(false, Ordering::Relaxed);
+        }
+        if word.is_empty() {
+            return;
+        }
+        let on = std::sync::Arc::new(AtomicBool::new(true));
+        *wake = Some((word.clone(), on.clone()));
+        std::thread::spawn(move || listen_for_wake_word(word, on));
+    }
+
+    pub fn show_in_folder(&self, path: &QString) {
+        let path = path.to_string();
+        std::thread::spawn(move || {
+            if let Err(err) = arnotch_core::system::show_in_folder(&path) {
+                tracing::warn!("cannot show {path} in its folder: {err:#}");
+            }
+        });
+    }
+
     pub fn new_chat(&self) {
+        stop_speaking();
         with_chat(|chat| {
             if let Some(pid) = chat.pid.take() {
                 chat::stop(pid);
             }
             chat.session_id = chat::new_session_id();
+            chat.model = None;
         });
     }
 }
@@ -605,6 +1037,7 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
             WEATHER.lock().unwrap().clone(),
             JOBS.lock().unwrap().clone(),
             PHONE.lock().unwrap().clone(),
+            PRIVACY_EVENT.lock().unwrap().clone(),
         ];
         for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));

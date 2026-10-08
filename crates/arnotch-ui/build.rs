@@ -32,6 +32,9 @@ fn main() {
         "qml/TimerRow.qml",
         "qml/Spring.qml",
         "qml/PhoneView.qml",
+        "qml/ProgressRing.qml",
+        "qml/ProgressRow.qml",
+        "qml/ChangeCard.qml",
     ]))
     .qt_module("Gui")
     .qt_module("Quick")

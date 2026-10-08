@@ -177,8 +177,8 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
                     text: card.mode === "prompt" ? (card.permission.plan != null ? qsTr("Approve the plan?") : qsTr("Claude asks"))
-                        : card.permission ? qsTr("Allow %1?").arg(card.permission.tool) + (card.mode === "diff" ? "  " + card.shownDiff.file : "")
-                        : card.mode === "diff" ? card.shownDiff.file
+                        : card.permission ? qsTr("Allow %1?").arg(card.permission.tool) + (card.mode === "diff" && card.shownDiff ? "  " + card.shownDiff.file : "")
+                        : card.mode === "diff" ? (card.shownDiff ? card.shownDiff.file : "")
                         : "$ " + card.session.command
                     color: "#c9ccd2"
                     font.pixelSize: 11

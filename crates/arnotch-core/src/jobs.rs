@@ -26,6 +26,9 @@ pub struct Job {
     pub title: String,
     /// The file (or folder) being written, by name.
     pub file: String,
+    /// Where it is written, when that is a local path (to open it once done).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
     /// From 0 to 100.
     pub percent: u32,
     /// Bytes per second, 0 when unknown.
@@ -80,6 +83,7 @@ impl Tracked {
                 .or_else(|| file_name(&self.string("descriptionValue2")))
                 .or_else(|| file_name(&self.string("descriptionValue1")))
                 .unwrap_or_default(),
+            path: local_path(&self.string("destUrl")).unwrap_or_default(),
             percent: percent.min(100) as u32,
             speed: self.number("speed"),
             processed_bytes,
@@ -94,6 +98,12 @@ fn file_name(location: &str) -> Option<String> {
     let location = location.trim().trim_end_matches('/');
     let name = location.rsplit('/').next()?.split(['?', '#']).next()?;
     (!name.is_empty()).then(|| percent_decode(name))
+}
+
+/// The path of a local file URL: "file:///home/me/a%20b.zip" gives "/home/me/a b.zip".
+fn local_path(location: &str) -> Option<String> {
+    let path = location.trim().strip_prefix("file://")?;
+    path.starts_with('/').then(|| percent_decode(path))
 }
 
 fn percent_decode(text: &str) -> String {
@@ -232,6 +242,11 @@ mod tests {
             Some("f.iso")
         );
         assert_eq!(file_name("").as_deref(), None);
+        assert_eq!(
+            local_path("file:///home/me/a%20b.zip").as_deref(),
+            Some("/home/me/a b.zip")
+        );
+        assert_eq!(local_path("https://x.org/f.iso"), None);
         assert_eq!(percent_decode("%C4%B0ndir%"), "İndir%");
         assert_eq!(percent_decode("%İ"), "%İ");
     }
@@ -248,6 +263,7 @@ mod tests {
         .job("JobView_3")
         .unwrap();
         assert_eq!(job.file, "f.iso");
+        assert_eq!(job.path, "/home/me/f.iso");
         assert_eq!(job.percent, 25);
         assert_eq!(job.speed, 100);
 

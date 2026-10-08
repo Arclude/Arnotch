@@ -37,6 +37,9 @@ struct HookInput {
     prompt: Option<String>,
     #[serde(default)]
     tool_use_id: Option<String>,
+    /// Set when a subagent calls the tool.
+    #[serde(default)]
+    agent_id: Option<String>,
 }
 
 /// Returns `None` for hook events the notch does not care about.
@@ -103,6 +106,8 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
         session_id: input.session_id,
         project,
         cwd: input.cwd,
+        tool_use_id: input.tool_use_id.unwrap_or_default(),
+        agent_id: input.agent_id.unwrap_or_default(),
         phase,
     }))
 }
@@ -251,7 +256,7 @@ fn tool_detail(tool: &str, input: &Value) -> String {
 }
 
 /// What a file-changing tool call is going to change.
-fn file_diff(tool: &str, input: &Value) -> Option<Diff> {
+pub(crate) fn file_diff(tool: &str, input: &Value) -> Option<Diff> {
     let path = str_field(input, "file_path");
     let name = file_name(path);
 
@@ -390,6 +395,8 @@ mod tests {
                 session_id: "abc".into(),
                 project: "korus".into(),
                 cwd: "/home/me/projects/korus".into(),
+                tool_use_id: String::new(),
+                agent_id: String::new(),
                 phase: AgentPhase::Tool {
                     tool: "Read".into(),
                     detail: "invoice.ts".into(),
@@ -630,6 +637,8 @@ mod tests {
             session_id: "abc".into(),
             project: "korus".into(),
             cwd: String::new(),
+            tool_use_id: String::new(),
+            agent_id: String::new(),
             phase: AgentPhase::Done,
         };
         assert_eq!(

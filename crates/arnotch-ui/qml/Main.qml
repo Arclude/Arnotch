@@ -38,6 +38,29 @@ QtObject {
         property bool chatFiles: false
         // Show the playing song in the closed island (instead of the clock)
         property bool compactMedia: true
+        // Dots on the island while apps use the microphone, the camera or record the screen
+        property bool privacyDots: true
+        // Read Claude's answers aloud: "voice" (questions asked by voice), "always" or "off"
+        property string speakAnswers: "voice"
+        // Wake arnotch by saying its name: the microphone stays on, listened to on this computer
+        property bool wakeOn: false
+        property string wakeWord: "Claude"
+        onWakeOnChanged: app.updateWakeWord()
+        onWakeWordChanged: app.updateWakeWord()
+        // Let Claude in the chat open apps, play music, change the volume, ... (commands
+        // that change more are asked first)
+        property bool computerControl: true
+        // Let Claude in the chat change files; each change waits for an Allow in the island,
+        // and the chat shows the diff once it is made
+        property bool chatEdit: true
+        // The chat's model: "auto" (Haiku, Sonnet or Opus, chosen for each message), or
+        // "haiku", "sonnet", "opus" for all of them
+        property string chatModel: "auto"
+        // "auto": also pick the model of Claude Code in terminals, for each prompt
+        // (arnotchctl claude-hook reads it from this file); "off" leaves them be
+        property string terminalModel: "off"
+        // The Obsidian vault Claude writes its research to; empty for none
+        property string obsidianVault: ""
         // The calendar's iCalendar (ICS) address, a secret; empty for no calendar
         property string calendarUrl: ""
         onCalendarUrlChanged: app.bridge.setCalendarUrl(calendarUrl)
@@ -85,6 +108,15 @@ QtObject {
 
         // An answer that finished while nobody looks at the chat gets a short note.
         onChatFinished: (status, body) => {
+            // ...or once it is written, when it isn't read aloud (that ends with speechEnded).
+            if (app.state.conversing) {
+                if (status !== "done")
+                    app.state.conversing = false
+                // (Reading may have ended first, when it couldn't start.)
+                else if (!app.speakingTurn || app.spokenTurn === app.state.chatTurn)
+                    app.bridge.startListening()
+                return
+            }
             for (let i = 0; i < app.islands.count; i++) {
                 const island = app.islands.objectAt(i)
                 if (island.expanded && island.shownTab === "chat")
@@ -96,6 +128,24 @@ QtObject {
                 : app.state.say(qsTr("Claude couldn't answer"), firstLine, 8000, true)
             if (shown)
                 app.state.notifying = true
+        }
+
+        // Asked by voice: the question goes to Claude like a typed one. An answer that isn't
+        // read aloud is shown.
+        onVoiceAsked: text => {
+            if (app.state.endsConversation(text)) {
+                app.endConversation()
+                return
+            }
+            if (!app.askClaude(text, true))
+                app.openIslands("chat")
+        }
+
+        // In a conversation, Claude listens again once it has said its answer...
+        onSpeechEnded: turn => {
+            app.spokenTurn = turn
+            if (app.state.conversing && !app.state.chatBusy)
+                app.bridge.startListening()
         }
 
         onPermissionRequested: requestId => {
@@ -113,6 +163,7 @@ QtObject {
             setCalendarUrl(app.settings.calendarUrl)
             setWeatherCity(app.settings.weatherCity)
             setDoNotDisturb(app.doNotDisturb)
+            app.updateWakeWord()
         }
         onEventReceived: json => {
             const ev = JSON.parse(json)
@@ -130,6 +181,10 @@ QtObject {
                 app.pick(ev.paths)
             else if (ev.type === "share")
                 app.bridge.shareFile(ev.path, app.settings.shareService, app.settings.shareCommand)
+            else if (ev.type === "listen")
+                app.listen(ev.action)
+            else if (ev.type === "wake")
+                app.wake(ev.question ?? "")
             else
                 app.state.handleEvent(ev)
         }
@@ -157,10 +212,71 @@ QtObject {
             settings: app.settings
             bridge: app.bridge
             onSettingsRequested: app.openSettings()
+            onAsked: text => app.askClaude(text, false)
+            onListenRequested: app.listen("start")
+            onConversationEnded: app.endConversation()
         }
     }
 
     property Window settingsWindow: null
+
+    // Whether the current answer is read aloud, and the last turn read to the end
+    property bool speakingTurn: false
+    property int spokenTurn: -1
+
+    // Sends a message to Claude in the chat, with the files attached to it. The answer is
+    // read aloud as the settings say; returns whether it is.
+    function askClaude(text, byVoice) {
+        const files = state.chatAttachments
+        const speak = settings.speakAnswers === "always" || (settings.speakAnswers === "voice" && byVoice)
+        speakingTurn = speak
+        const turn = bridge.askClaude(text, files.join("\n"), settings.chatWeb, settings.chatFiles,
+                                      settings.computerControl, settings.chatEdit, speak,
+                                      settings.chatModel, settings.obsidianVault)
+        state.startChatTurn(turn, text, files)
+        state.chatAttachments = []
+        return speak
+    }
+
+    // Ends talking by voice: no more listening or speaking.
+    function endConversation() {
+        state.conversing = false
+        bridge.cancelListening()
+        bridge.stopSpeaking()
+        state.voice = null
+    }
+
+    // A keyboard shortcut or script: "start", "stop", "toggle" or "cancel" listening. Toggling
+    // while Claude speaks interrupts it to listen.
+    function listen(action) {
+        if (action === "cancel") {
+            endConversation()
+        } else if (action === "stop" || (action === "toggle" && state.listening)) {
+            bridge.stopListening()
+        } else if (state.voice === null && !(state.conversing && state.chatBusy && !state.speaking)) {
+            state.conversing = true
+            bridge.startListening()
+            // Heard from anywhere, even with the island out of sight.
+            bridge.playSound("message-new-instant")
+            bridge.notifyDesktop("listening", qsTr("Listening"), qsTr("Ask your question; a pause sends it."),
+                                 "audio-input-microphone")
+        }
+    }
+
+    function updateWakeWord() {
+        bridge.setWakeWord(settings.wakeOn ? settings.wakeWord : "")
+    }
+
+    // The wake word was heard: listen for the question, or ask the one said along with it.
+    function wake(question) {
+        if (question) {
+            bridge.playSound("message-new-instant")
+            state.conversing = true
+            state.voiceAsked(question)
+        } else {
+            listen("start")
+        }
+    }
 
     function openIslands(tab) {
         for (let i = 0; i < islands.count; i++) {

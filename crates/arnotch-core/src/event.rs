@@ -20,6 +20,13 @@ pub enum Event {
         /// The agent's working directory, used to find its terminal.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         cwd: String,
+        /// The tool call this is about (tools and permission requests), to tell when a
+        /// request was answered in the terminal.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        tool_use_id: String,
+        /// The subagent at work, empty for the main agent.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        agent_id: String,
         #[serde(flatten)]
         phase: AgentPhase,
     },
@@ -51,6 +58,30 @@ pub enum Event {
     Focus {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         minutes: Option<u64>,
+    },
+    /// A script's progress, shown like a download until it is done: `arnotchctl progress
+    /// backup 40 "Backing up"`. Another event with the same `id` updates it.
+    Progress {
+        id: String,
+        /// From 0 to 100; absent while the end can't be told (a busy bar).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        percent: Option<f32>,
+        #[serde(default)]
+        title: String,
+        /// A second line, such as the file being worked on.
+        #[serde(default)]
+        detail: String,
+        #[serde(default)]
+        state: ProgressState,
+    },
+    /// Start listening for a question to Claude (`start`), stop and send it (`stop`),
+    /// either one (`toggle`, for a keyboard shortcut) or forget it (`cancel`).
+    Listen { action: ListenAction },
+    /// The wake word was heard: listen for a question, or ask `question` when it was said
+    /// along with the name. Published by the notch itself, or sent to try it out.
+    Wake {
+        #[serde(default)]
+        question: String,
     },
     /// Put files (absolute paths) on the shelf.
     Shelve { paths: Vec<String> },
@@ -127,6 +158,25 @@ pub enum Event {
     Weather {
         weather: Option<crate::weather::Weather>,
     },
+    /// Apps using the microphone, the camera or recording the screen, by name; published by
+    /// the notch itself.
+    #[serde(skip_deserializing)]
+    Privacy(crate::privacy::InUse),
+    /// Listening for a question to Claude; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Voice {
+        state: VoiceState,
+        /// While listening: how loud it is, from 0.0 to 1.0.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        level: f32,
+        /// Done: what was said. Failed: what went wrong.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        text: String,
+    },
+    /// The answer to chat message `turn` is being read aloud, or is done (also sent when
+    /// nothing could be read); published by the notch itself.
+    #[serde(skip_deserializing)]
+    Speech { turn: u32, speaking: bool },
     /// What's playing, `None` when no player has a track; published by the notch itself.
     #[serde(skip_deserializing)]
     Media {
@@ -256,6 +306,40 @@ pub enum Decision {
     Ask,
 }
 
+fn is_zero(value: &f32) -> bool {
+    *value == 0.0
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgressState {
+    #[default]
+    Running,
+    Done,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ListenAction {
+    Start,
+    Stop,
+    Toggle,
+    Cancel,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VoiceState {
+    Listening,
+    /// Turning the recording into text.
+    Transcribing,
+    Done,
+    Failed,
+    /// Stopped without a question: cancelled, or nothing was said.
+    Cancelled,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UploadState {
@@ -270,6 +354,10 @@ pub enum ChatState {
     Streaming,
     /// Claude uses a tool; the text is its name ("WebSearch", "Read", ...).
     Tool,
+    /// The model answering ("Haiku", "Sonnet", "Opus"), before the answer.
+    Model,
+    /// Claude changed a file; the text is the [`Diff`] as JSON.
+    Change,
     Done,
     Failed,
     Stopped,

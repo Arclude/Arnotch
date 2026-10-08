@@ -1,7 +1,8 @@
 import QtQuick
 import QtQuick.Shapes
 
-// The notch mascot. `mood` drives the eyes: idle | working | waiting | happy.
+// The notch mascot. `mood` drives the eyes: idle | working | waiting | happy | listening
+// | speaking.
 // Animations only run while the face is visible, so hidden faces cost nothing, and
 // only while something moves: timers start each short move, so pauses draw no frames.
 Item {
@@ -10,13 +11,30 @@ Item {
     property string mood: "idle"
     property real size: 40
     property color badge: "transparent"
+    // While listening: how loud the voice is, from 0 to 1
+    property real level: 0
 
     property bool blinking: false
+    // Speaking: how far the mouth is open, from 0 to 1
+    property real mouth: 0
 
     implicitWidth: size * 1.3
     implicitHeight: size
 
     onMoodChanged: if (mood !== "working") eyes.lookX = 0
+
+    // Listening: a halo that swells with the voice
+    Rectangle {
+        anchors.centerIn: head
+        visible: face.mood === "listening"
+        width: head.width + Math.round(face.size * (0.12 + face.level * 0.3))
+        height: head.height + Math.round(face.size * (0.12 + face.level * 0.3))
+        radius: height * 0.38
+        color: "transparent"
+        border.color: "#ff9f0a"
+        border.width: Math.max(1.5, face.size * 0.05)
+        opacity: 0.35 + face.level * 0.65
+    }
 
     Rectangle {
         id: head
@@ -38,7 +56,8 @@ Item {
             anchors.centerIn: parent
             // Whole pixels: a small face would otherwise redraw for every fraction of one.
             anchors.horizontalCenterOffset: Math.round(lookX * face.size * 0.13)
-            anchors.verticalCenterOffset: face.mood === "waiting" ? -face.size * 0.04 : 0
+            anchors.verticalCenterOffset: face.mood === "speaking" ? -face.size * 0.08
+                                        : face.mood === "waiting" || face.mood === "listening" ? -face.size * 0.04 : 0
             width: face.size * 0.62
             height: face.size * 0.32
 
@@ -59,7 +78,7 @@ Item {
                         visible: face.mood !== "happy"
                         width: parent.width
                         height: face.blinking ? Math.max(2, face.size * 0.04)
-                              : face.mood === "waiting" ? parent.height
+                              : face.mood === "waiting" || face.mood === "listening" ? parent.height
                               : parent.height * 0.78
                         radius: width / 2
                         color: "#16181d"
@@ -95,6 +114,18 @@ Item {
         }
     }
 
+    // Speaking: a mouth that opens and closes
+    Rectangle {
+        visible: face.mood === "speaking"
+        anchors.horizontalCenter: head.horizontalCenter
+        anchors.verticalCenter: head.verticalCenter
+        anchors.verticalCenterOffset: Math.round(face.size * 0.22)
+        width: Math.round(face.size * 0.24)
+        height: Math.max(2, Math.round(face.size * (0.05 + face.mouth * 0.13)))
+        radius: Math.min(width, height) / 2
+        color: "#16181d"
+    }
+
     Rectangle {
         visible: face.badge.a > 0
         width: face.size * 0.3
@@ -109,7 +140,7 @@ Item {
 
     // Random blinking
     Timer {
-        running: face.visible && (face.mood === "idle" || face.mood === "waiting")
+        running: face.visible && (face.mood === "idle" || face.mood === "waiting" || face.mood === "listening")
         repeat: true
         interval: 2600
         onTriggered: {
@@ -122,6 +153,15 @@ Item {
         id: unblink
         interval: 110
         onTriggered: face.blinking = false
+    }
+
+    // Talking: the mouth moves about eight times a second
+    Timer {
+        running: face.visible && face.mood === "speaking"
+        repeat: true
+        interval: 120
+        onTriggered: face.mouth = face.mouth > 0.5 ? Math.random() * 0.3 : 0.5 + Math.random() * 0.5
+        onRunningChanged: if (!running) face.mouth = 0
     }
 
     // Glance left and right while working

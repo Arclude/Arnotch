@@ -84,12 +84,35 @@ fn turkish(text: &str) -> Option<&'static str> {
         "{}s" => "{} sn",
         "{}m {}s" => "{} dk {} sn",
         "{}h {}m" => "{} sa {} dk",
+        // Voice
+        "Can't record (pw-record)" => "Kayıt yapılamıyor (pw-record)",
+        "The recording stopped" => "Kayıt durdu",
+        "No speech model: run arnotchctl voice-model" => {
+            "Konuşma modeli yok: arnotchctl voice-model komutunu çalıştır"
+        }
+        "No speech model: run arnotchctl voice-model base" => {
+            "Konuşma modeli yok: arnotchctl voice-model base komutunu çalıştır"
+        }
+        "Can't listen for the wake word" => "Uyandırma sözü dinlenemiyor",
+        "whisper.cpp is not installed (whisper-cli)" => {
+            "whisper.cpp kurulu değil (whisper-cli): sudo pacman -S whisper-cpp"
+        }
+        "No voice to read answers: run arnotchctl speech-voice" => {
+            "Cevapları okuyacak ses yok: arnotchctl speech-voice komutunu çalıştır"
+        }
+        "Can't read the answer aloud" => "Cevap sesli okunamadı",
         // Terminals
         "Finished after {} · {} · {}" => "{} sonra bitti · {} · {}",
         "Can't switch to the terminal" => "Terminale geçilemedi",
         "Can't type into the terminal" => "Terminale yazılamadı",
         "Can't send the file to Claude" => "Dosya Claude'a gönderilemedi",
         "Terminal {} is gone" => "{} terminali artık açık değil",
+        // Choosing Claude Code's model
+        "Claude Code → {}" => "Claude Code → {}",
+        "{} was answering; this prompt suits {}" => "{} cevap veriyordu; bu istem {} için",
+        "arnotch: switching to {}, then sending the prompt again…" => {
+            "arnotch: {} modeline geçiliyor, ardından istem yeniden gönderilecek…"
+        }
         "Sending text to {} is not supported" => "{} terminaline yazı gönderilemiyor",
         "Konsole blocks typing from other apps. Enable it in Konsole: Settings › Configure Konsole › General › “Enable the security sensitive parts of the DBus API”" => {
             "Konsole başka uygulamaların yazmasını engelliyor. Konsole'da aç: Ayarlar › Konsole'u Yapılandır › Genel › “DBus API'sinin güvenliğe duyarlı kısımlarını etkinleştir”"
@@ -149,6 +172,9 @@ mod tests {
             "{} is not in reach",
             "{} is not a file",
             "Upload failed: {}",
+            "Claude Code → {}",
+            "{} was answering; this prompt suits {}",
+            "arnotch: switching to {}, then sending the prompt again…",
         ] {
             let turkish = turkish(english).unwrap();
             assert_eq!(

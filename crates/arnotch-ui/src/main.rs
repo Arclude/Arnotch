@@ -56,6 +56,22 @@ fn main() -> anyhow::Result<()> {
         })?;
 
     std::thread::Builder::new()
+        .name("notch-pipewire".into())
+        .spawn(|| {
+            if let Err(err) = arnotch_core::privacy::watch_pipewire(bridge::publish_pipewire) {
+                tracing::info!("no microphone indicator (pw-dump): {err:#}");
+            }
+        })?;
+
+    std::thread::Builder::new()
+        .name("notch-cameras".into())
+        .spawn(|| {
+            if let Err(err) = arnotch_core::privacy::watch_cameras(bridge::publish_cameras) {
+                tracing::info!("no camera indicator: {err:#}");
+            }
+        })?;
+
+    std::thread::Builder::new()
         .name("notch-phone".into())
         .spawn(|| {
             if let Err(err) = arnotch_core::phone::watch(bridge::publish_phone) {

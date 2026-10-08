@@ -12,6 +12,18 @@ Column {
     required property var attachments
     // A file dialog is open: the island must not close when it takes the focus.
     readonly property bool dialogOpen: dialogLoader.active
+    // Asking by voice: NotchState.voice ({ state: "listening" | "transcribing", level }) or null
+    property var voice: null
+    // The answer is being read aloud
+    property bool speaking: false
+    // The latest loudness levels, oldest first, for the bars
+    property var levels: []
+    onVoiceChanged: {
+        if (!voice)
+            levels = []
+        else if (voice.state === "listening")
+            levels = levels.concat([voice.level]).slice(-28)
+    }
 
     signal asked(string text)
     signal stopped()
@@ -19,11 +31,20 @@ Column {
     signal cancelled()
     signal attached(var paths)
     signal detached(string path)
+    // Start listening, stop and send what was said, or forget it
+    signal silenced()
+    signal listen()
+    signal listened()
+    signal unheard()
 
     function toolText(name) {
         return name === "WebSearch" || name === "web_search" ? qsTr("Searching the web…")
              : name === "WebFetch" || name === "web_fetch" ? qsTr("Reading a web page…")
              : name === "Read" ? qsTr("Reading a file…")
+             : name === "Bash" ? qsTr("Running a command…")
+             : name === "Edit" ? qsTr("Changing a file…")
+             : name === "Write" ? qsTr("Writing a file…")
+             : name.startsWith("mcp__obsidian") ? qsTr("Writing a note in Obsidian…")
              : qsTr("Looking through files…")
     }
 
@@ -44,6 +65,7 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             size: 36
             mood: view.mood
+            level: view.voice ? view.voice.level : 0
         }
 
         Column {
@@ -111,25 +133,52 @@ Column {
                     required property string status
                     required property string files
                     required property string tool
+                    required property string model
+                    required property string changes
                     readonly property bool mine: who === "user"
+                    readonly property var changed: JSON.parse(changes || "[]")
 
                     width: column.width
-                    height: bubble.height + (extra.visible ? extra.height + 4 : 0)
+                    height: bubble.height + (changeList.visible ? changeList.height + 6 : 0)
+                            + (extra.visible ? extra.height + 4 : 0)
+
+                    // The files Claude changed while answering, under its answer
+                    Column {
+                        id: changeList
+                        anchors.top: bubble.bottom
+                        anchors.topMargin: 6
+                        width: parent.width
+                        spacing: 4
+                        visible: message.changed.length > 0
+
+                        Repeater {
+                            model: message.changed
+
+                            ChangeCard {
+                                required property var modelData
+                                width: changeList.width
+                                diff: modelData
+                                // Many changes start folded, so the answer stays in view.
+                                folded: message.changed.length > 2
+                            }
+                        }
+                    }
 
                     // Attached files under a message, or the tool Claude is using
                     Text {
                         id: extra
-                        anchors.top: bubble.bottom
+                        anchors.top: changeList.visible ? changeList.bottom : bubble.bottom
                         anchors.topMargin: 4
                         anchors.right: message.mine ? parent.right : undefined
                         anchors.left: message.mine ? undefined : parent.left
                         anchors.leftMargin: 2
                         visible: text !== ""
                         text: message.mine ? (message.files ? "📎 " + message.files.split("\n").join(", ") : "")
-                                           : (message.tool ? view.toolText(message.tool) : "")
-                        color: message.mine ? "#8b909a" : "#8fb4ff"
+                                           : message.tool ? view.toolText(message.tool) : message.model
+                        // The model answering, in grey, once no tool is in use.
+                        color: message.mine || !message.tool ? "#8b909a" : "#8fb4ff"
                         font.pixelSize: 10
-                        font.italic: !message.mine
+                        font.italic: !message.mine && message.tool !== ""
                         elide: Text.ElideMiddle
                         width: Math.min(implicitWidth, column.width)
                     }
@@ -267,9 +316,82 @@ Column {
             onClicked: dialogLoader.active = true
         }
 
+        IconButton {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: view.voice === null
+            glyph: "🎙"
+            hint: qsTr("Ask by voice")
+            onClicked: view.listen()
+        }
+
+        // Listening: bars that follow the voice; a click sends, × forgets it
+        Rectangle {
+            id: listeningPanel
+            visible: view.voice !== null
+            width: field.width + 26 + parent.spacing
+            height: 30
+            radius: 8
+            color: "#1a1d23"
+            border.color: view.voice && view.voice.state === "listening" ? "#ff9f0a" : "#26ffffff"
+            border.width: 1
+
+            readonly property bool listening: view.voice !== null && view.voice.state === "listening"
+
+            Row {
+                id: bars
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+                visible: listeningPanel.listening
+
+                Repeater {
+                    model: 28
+
+                    Rectangle {
+                        required property int index
+                        // The newest level on the right
+                        readonly property real level: view.levels[view.levels.length - 28 + index] ?? 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 3
+                        height: 3 + Math.round(level * level * 18)
+                        radius: 1.5
+                        color: "#ff9f0a"
+                        opacity: 0.45 + level * 0.55
+                    }
+                }
+            }
+            Text {
+                anchors.left: listeningPanel.listening ? bars.right : parent.left
+                anchors.leftMargin: 10
+                anchors.right: unhear.left
+                anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: listeningPanel.listening ? qsTr("Listening… click when done") : qsTr("Turning it into text…")
+                color: listeningPanel.listening ? "#c9ccd2" : "#8b909a"
+                font.pixelSize: 12
+            }
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: listeningPanel.listening ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: if (listeningPanel.listening) view.listened()
+            }
+            IconButton {
+                id: unhear
+                anchors.right: parent.right
+                anchors.rightMargin: 2
+                anchors.verticalCenter: parent.verticalCenter
+                glyph: "×"
+                hint: qsTr("Cancel")
+                onClicked: view.unheard()
+            }
+        }
+
         SendField {
             id: field
-            width: parent.width - actions.width - 26 - parent.spacing * 2
+            visible: view.voice === null
+            width: parent.width - actions.width - 52 - parent.spacing * 3
             monospace: false
             placeholder: view.messages.count ? qsTr("Reply to Claude…") : qsTr("Ask Claude…")
             onSubmitted: text => view.asked(text)
@@ -281,6 +403,13 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
 
+            IconButton {
+                visible: view.speaking
+                glyph: "🔇"
+                hint: qsTr("Stop reading aloud")
+                tint: "#ff9f0a"
+                onClicked: view.silenced()
+            }
             IconButton {
                 visible: view.busy
                 glyph: "■"

@@ -78,15 +78,54 @@ QtObject {
     // Downloads and transfers in progress: [{ id, title, file, percent, speed,
     // processed_bytes, total_bytes, suspended }]
     property var jobs: []
-    // All of them together, from 0 to 1
-    readonly property real jobsProgress: {
-        const total = jobs.reduce((sum, j) => sum + j.total_bytes, 0)
-        if (total > 0)
-            return jobs.reduce((sum, j) => sum + j.processed_bytes, 0) / total
-        return jobs.length ? jobs.reduce((sum, j) => sum + j.percent, 0) / jobs.length / 100 : 0
-    }
     // When each job was first seen, by id
     property var jobStarts: ({})
+    // Scripts' progress (arnotchctl progress): [{ id, title, detail, percent (null: busy),
+    // state: "running" | "done" | "failed", updated }]
+    property var scripts: []
+    // Transfers and scripts that just ended, shown for a moment (with Open buttons):
+    // activities as below, with ended: Date.now()
+    property var ended: []
+    // Everything in progress, as the island shows it, then what just ended: [{ key,
+    // kind: "download" | "copy" | "script", name, status, percent (0..100, -1: busy),
+    // speed, processed, total, state: "running" | "paused" | "done" | "failed", path }]
+    readonly property var activities: {
+        const running = jobs.map(jobActivity).concat(scripts.filter(s => s.state === "running").map(scriptActivity))
+        const keys = running.map(a => a.key)
+        return running.concat(ended.filter(a => !keys.includes(a.key)))
+    }
+    readonly property var runningActivities: activities.filter(a => a.state === "running" || a.state === "paused")
+    // All of them together, from 0 to 1 (transfers by their bytes); -1 when none can tell
+    readonly property real activitiesProgress: {
+        const known = runningActivities.filter(a => a.percent >= 0)
+        if (known.length === 0)
+            return -1
+        const total = known.reduce((sum, a) => sum + a.total, 0)
+        if (known.every(a => a.total > 0))
+            return known.reduce((sum, a) => sum + a.processed, 0) / total
+        return known.reduce((sum, a) => sum + a.percent, 0) / known.length / 100
+    }
+    // Apps using the microphone, the camera or recording the screen, by name
+    property var privacy: ({ microphone: [], camera: [], screen: [] })
+    readonly property bool privacyInUse: privacy.microphone.length + privacy.camera.length + privacy.screen.length > 0
+    // Asking Claude by voice: { state: "listening" | "transcribing", level } or null
+    property var voice: null
+    readonly property bool listening: voice !== null && voice.state === "listening"
+    // Claude's answer is being read aloud
+    property bool speaking: false
+    // Talking with Claude by voice: after each answer, it listens again, until the user
+    // says nothing (or "that's all"), or ends it
+    property bool conversing: false
+    // The latest loudness levels while listening, oldest first
+    property var voiceLevels: []
+    // Where the conversation is: "listening", "transcribing", "thinking", "speaking" or ""
+    readonly property string conversation: !conversing ? ""
+                                         : voice !== null ? voice.state
+                                         : speaking ? "speaking"
+                                         : chatBusy ? "thinking" : ""
+    // How the faces look: listening and speaking come before the agents' mood
+    readonly property string faceMood: listening ? "listening" : speaking ? "speaking"
+                                     : conversation === "thinking" || conversation === "transcribing" ? "working" : mood
 
     // { place, temperature, high, low, code, is_day } or null
     property var weather: null
@@ -128,7 +167,8 @@ QtObject {
     readonly property bool uploading: uploads.length > 0
     // The island's chat with Claude: rows of { who: "user" | "claude", body,
     // status: "streaming" | "done" | "failed" | "stopped", files: attached file names, one
-    // per line, tool: the tool Claude is using }. A failed answer's body is the error.
+    // per line, tool: the tool Claude is using, changes: the files Claude changed, a JSON
+    // array of diffs ({ file, lines, truncated }) }. A failed answer's body is the error.
     // A ListModel, so a new piece of the answer updates one row instead of rebuilding them all.
     property ListModel chat: ListModel {
         // ListModel is not reactive inside functions, so bindings depend on `revision`.
@@ -151,6 +191,10 @@ QtObject {
     signal permissionRequested(string requestId)
     // Claude finished answering in the chat ("done" or "failed"), with the answer or error.
     signal chatFinished(string status, string body)
+    // A question was asked by voice: Main sends it to Claude.
+    signal voiceAsked(string text)
+    // The answer to a chat turn has been read aloud (or couldn't be).
+    signal speechEnded(int turn)
 
     // True while a new event wants the islands to open on their own.
     readonly property bool alerting: alertTimer.running
@@ -205,6 +249,18 @@ QtObject {
             startFocus(ev.minutes ?? focusMinutes)
         } else if (ev.type === "jobs") {
             handleJobs(ev.jobs)
+        } else if (ev.type === "progress") {
+            handleProgress(ev)
+        } else if (ev.type === "privacy") {
+            privacy = { microphone: ev.microphone, camera: ev.camera, screen: ev.screen }
+        } else if (ev.type === "voice") {
+            handleVoice(ev)
+        } else if (ev.type === "speech") {
+            if (ev.turn !== chatTurn)
+                return
+            speaking = ev.speaking
+            if (!ev.speaking)
+                speechEnded(ev.turn)
         } else if (ev.type === "weather") {
             weather = ev.weather ?? null
         } else if (ev.type === "phone") {
@@ -369,8 +425,8 @@ QtObject {
         }
         chatTurn = turn
         const names = (files ?? []).map(path => path.split("/").pop()).join("\n")
-        chat.append({ who: "user", body: prompt, status: "done", files: names, tool: "" })
-        chat.append({ who: "claude", body: "", status: "streaming", files: "", tool: "" })
+        chat.append({ who: "user", body: prompt, status: "done", files: names, tool: "", model: "", changes: "[]" })
+        chat.append({ who: "claude", body: "", status: "streaming", files: "", tool: "", model: "", changes: "[]" })
         chat.revision++
     }
 
@@ -393,6 +449,14 @@ QtObject {
             chat.setProperty(last, "tool", "")
         } else if (ev.state === "tool") {
             chat.setProperty(last, "tool", ev.text)
+        } else if (ev.state === "model") {
+            chat.setProperty(last, "model", ev.text)
+        } else if (ev.state === "change") {
+            // Kept as JSON: a ListModel role holds one type for every row.
+            const changes = JSON.parse(chat.get(last).changes)
+            changes.push(JSON.parse(ev.text))
+            chat.setProperty(last, "changes", JSON.stringify(changes))
+            chat.setProperty(last, "tool", "")
         } else {
             chat.setProperty(last, "tool", "")
             chat.setProperty(last, "status", ev.state)
@@ -486,15 +550,105 @@ QtObject {
         const starts = {}
         for (const job of now)
             starts[job.id] = jobStarts[job.id] ?? at
-        // A transfer that ran a while and reached the end says so; quick ones just go.
+        // A transfer that reached the end stays a moment, to open it; one that ran a while
+        // also says so. Cancelled ones just go.
         for (const job of jobs) {
-            if (!(job.id in starts) && job.percent >= 99 && at - jobStarts[job.id] > 5000) {
-                if (say(qsTr("✓ %1").arg(job.file || job.title), job.title, 4000, true))
-                    notifying = true
-            }
+            if (job.id in starts || job.percent < 99)
+                continue
+            const activity = Object.assign(jobActivity(job), { state: "done", percent: 100, speed: 0 })
+            addEnded(activity)
+            if (at - jobStarts[job.id] > 5000 && say(activity.kind === "download" ? qsTr("Downloaded") : qsTr("Copied"),
+                                                     activity.name, 5000, true))
+                notifying = true
         }
         jobStarts = starts
         jobs = now
+    }
+
+    function handleProgress(ev) {
+        const others = scripts.filter(s => s.id !== ev.id)
+        const before = scripts.find(s => s.id === ev.id)
+        const script = { id: ev.id, title: ev.title || (before ? before.title : ev.id), detail: ev.detail,
+                         percent: ev.percent ?? null, state: ev.state, updated: Date.now(),
+                         started: before ? before.started : Date.now() }
+        if (ev.state === "running") {
+            scripts = others.concat([script])
+            return
+        }
+        scripts = others
+        addEnded(Object.assign(scriptActivity(script), { state: ev.state, percent: ev.state === "done" ? 100 : script.percent ?? 0 }))
+        if (say(ev.state === "done" ? qsTr("✓ %1").arg(script.title) : qsTr("✗ %1").arg(script.title),
+                script.detail || (ev.state === "done" ? qsTr("Done") : qsTr("Failed")), ev.state === "done" ? 4000 : 8000,
+                ev.state === "done"))
+            notifying = true
+    }
+
+    function addEnded(activity) {
+        ended = ended.filter(a => a.key !== activity.key).concat([Object.assign(activity, { ended: Date.now() })])
+    }
+
+    // "Downloading", "İndiriliyor", "Copying", "Kopyalanıyor", ... as KDE names its jobs
+    function jobActivity(job) {
+        // ("İ" doesn't match "i" case-insensitively.)
+        const download = /download|[iİ]ndir|herunterlad|télécharg|descarg/i.test(job.title)
+        return {
+            key: "job:" + job.id,
+            kind: download ? "download" : "copy",
+            name: job.file || job.title,
+            status: job.title,
+            percent: job.percent,
+            speed: job.speed,
+            processed: job.processed_bytes,
+            total: job.total_bytes,
+            state: job.suspended ? "paused" : "running",
+            path: job.path ?? ""
+        }
+    }
+
+    function scriptActivity(script) {
+        return {
+            key: "script:" + script.id,
+            kind: "script",
+            name: script.title,
+            status: script.detail,
+            percent: script.percent === null ? -1 : script.percent,
+            speed: 0,
+            processed: 0,
+            total: 0,
+            state: script.state,
+            path: ""
+        }
+    }
+
+    function handleVoice(ev) {
+        if (ev.state === "listening" || ev.state === "transcribing") {
+            if (!voice || voice.state !== ev.state)
+                voiceLevels = []
+            voice = { state: ev.state, level: ev.level ?? 0 }
+            if (ev.state === "listening")
+                voiceLevels = voiceLevels.concat([ev.level ?? 0]).slice(-24)
+            return
+        }
+        voice = null
+        voiceLevels = []
+        if (ev.state === "done") {
+            voiceAsked(ev.text)
+        } else {
+            // Nothing said: the conversation is over.
+            conversing = false
+            if (ev.state === "failed") {
+                say(qsTr("Couldn't hear you"), ev.text, 10000)
+                notifying = true
+            }
+        }
+    }
+
+    // "That's all", "teşekkürler", ...: words that end a conversation instead of asking.
+    function endsConversation(text) {
+        const said = text.toLocaleLowerCase(Qt.locale("tr_TR")).replace(/[^\p{L}\s']/gu, "").trim().replace(/\s+/g, " ")
+        return ["bu kadar", "tamam bu kadar", "yeter", "sus", "kapat", "bitti", "görüşürüz", "teşekkürler",
+                "teşekkür ederim", "sağ ol", "sağol", "tamam teşekkürler", "that's all", "thats all", "thanks",
+                "thank you", "stop", "bye", "goodbye"].includes(said)
     }
 
     function extendTimer(seconds) {
@@ -677,6 +831,22 @@ QtObject {
     property Timer activityTimer: Timer { interval: 3500 }
     property Timer levelTimer: Timer { interval: 1600 }
     property Timer pauseGrace: Timer { interval: 30000 }
+
+    // Ended transfers go after a few seconds; scripts that stopped reporting after 10 minutes.
+    property Timer activitySweeper: Timer {
+        interval: 1000
+        repeat: true
+        running: notch.ended.length > 0 || notch.scripts.length > 0
+        onTriggered: {
+            const now = Date.now()
+            const ended = notch.ended.filter(a => now - a.ended < 8000)
+            if (ended.length !== notch.ended.length)
+                notch.ended = ended
+            const scripts = notch.scripts.filter(s => now - s.updated < 600000)
+            if (scripts.length !== notch.scripts.length)
+                notch.scripts = scripts
+        }
+    }
 
     // Ticks the countdown, and rings when the timer runs out.
     property Timer timerTick: Timer {

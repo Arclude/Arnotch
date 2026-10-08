@@ -37,8 +37,13 @@ Window {
     readonly property int collapsedWidth: 190
     // Volume, brightness or charge just changed: the closed island widens to show it.
     readonly property bool levelShown: notch.showingLevel && !expanded
+    // Talking with Claude by voice: the closed island shows whether it listens, thinks or speaks.
+    readonly property bool conversationShown: notch.conversing && !levelShown && !expanded
+    // A download, copy or script at work: the closed island shows it with its progress.
+    readonly property bool activityShown: notch.runningActivities.length > 0 && !levelShown && !conversationShown && !expanded
     // Music playing: the closed island shows the song and a pause button.
-    readonly property bool mediaShown: settings.compactMedia && notch.mediaActive && !levelShown && !expanded
+    readonly property bool mediaShown: settings.compactMedia && notch.mediaActive && !levelShown && !activityShown
+                                       && !conversationShown && !expanded
     // Matches the top panel by default, so the closed island never covers windows.
     readonly property int collapsedHeight: settings.height
     // The tab picked by the user; an island opened by an event always shows activity.
@@ -66,17 +71,12 @@ Window {
     readonly property bool sharingOn: settings.shareService !== "off"
 
     signal settingsRequested()
+    // The user asked Claude something in the chat.
+    signal asked(string text)
+    // The user wants to ask by voice, or to stop talking by voice.
+    signal listenRequested()
+    signal conversationEnded()
 
-    // "850 KB/s", "3.2 MB/s"
-    function formatSpeed(bytesPerSecond) {
-        const units = ["B/s", "KB/s", "MB/s", "GB/s"]
-        let value = bytesPerSecond, unit = 0
-        while (value >= 1000 && unit < units.length - 1) {
-            value /= 1000
-            unit++
-        }
-        return (unit >= 2 && value < 10 ? value.toLocaleString(Qt.locale(), "f", 1) : Math.round(value)) + " " + units[unit]
-    }
     readonly property bool onActivity: shownTab === "activity"
 
     // Show the detailed activity card instead of the headline.
@@ -280,6 +280,8 @@ Window {
         Spring {
             id: widthSpring
             target: root.expanded ? root.expandedWidth : root.levelShown ? 310
+                  : root.conversationShown ? compactConversation.fitWidth
+                  : root.activityShown ? compactActivity.fitWidth
                   : root.mediaShown ? compactMedia.fitWidth
                   : root.collapsedWidth
         }
@@ -322,11 +324,222 @@ Window {
             Behavior on opacity { NumberAnimation { duration: 140 } }
 
             Face {
+                id: compactFace
                 anchors.left: parent.left
                 anchors.leftMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
                 size: Math.round(root.collapsedHeight * 0.58)
-                mood: root.notch.mood
+                mood: root.notch.faceMood
+                level: root.notch.voice ? root.notch.voice.level : 0
+            }
+
+            // Microphone (orange), camera (green) and screen recording (purple) in use,
+            // as dots on the face's corner
+            Row {
+                anchors.right: compactFace.right
+                anchors.rightMargin: -5
+                anchors.top: compactFace.top
+                anchors.topMargin: -3
+                spacing: 2
+                visible: root.settings.privacyDots
+
+                Repeater {
+                    model: [
+                        { on: root.notch.privacy.microphone.length > 0, color: "#ff9f0a" },
+                        { on: root.notch.privacy.camera.length > 0, color: "#30d158" },
+                        { on: root.notch.privacy.screen.length > 0, color: "#bf5af2" }
+                    ].filter(d => d.on)
+
+                    Rectangle {
+                        required property var modelData
+                        width: 7
+                        height: 7
+                        radius: 3.5
+                        color: modelData.color
+                        border.color: "#0b0c0f"
+                        border.width: 1
+                    }
+                }
+            }
+
+            // Talking by voice: bars that follow the voice (or Claude's), what is going on, and ×
+            Item {
+                id: compactConversation
+                anchors.fill: parent
+                visible: root.conversationShown
+
+                readonly property string state: root.notch.conversation
+                readonly property bool waiting: state === "transcribing" || state === "thinking"
+                readonly property color tint: state === "listening" ? "#ff9f0a" : state === "speaking" ? "#34c759" : "#8fb4ff"
+                // Claude's voice isn't measured: its bars move on their own.
+                property var spoken: []
+                // Moves the waiting dots
+                property real phase: 0
+                readonly property var labels: [qsTr("Listening"), qsTr("Understanding…"), qsTr("Thinking…"), qsTr("Speaking")]
+                // The widest label: the island keeps one width while the state changes.
+                property real labelWidth: 0
+                readonly property real fitWidth: Math.round(conversationBars.anchors.leftMargin + conversationBars.width
+                                                            + 10 + labelWidth + 12 + conversationEnd.width + 4)
+
+                Repeater {
+                    model: compactConversation.labels
+
+                    Text {
+                        required property string modelData
+                        visible: false
+                        text: modelData
+                        font: conversationLabel.font
+                        function measure() {
+                            compactConversation.labelWidth = Math.max(compactConversation.labelWidth, implicitWidth)
+                        }
+                        onImplicitWidthChanged: measure()
+                        Component.onCompleted: measure()
+                    }
+                }
+
+                Timer {
+                    running: compactConversation.visible && compactConversation.state === "speaking"
+                    repeat: true
+                    interval: 90
+                    onTriggered: compactConversation.spoken = compactConversation.spoken.concat([0.3 + Math.random() * 0.7]).slice(-16)
+                    onRunningChanged: if (!running) compactConversation.spoken = []
+                }
+                Timer {
+                    running: compactConversation.visible && compactConversation.waiting
+                    repeat: true
+                    interval: 100
+                    onTriggered: compactConversation.phase += 1
+                }
+
+                Row {
+                    id: conversationBars
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12 + Math.round(root.collapsedHeight * 0.58 * 1.3) + 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+
+                    readonly property var levels: compactConversation.state === "speaking" ? compactConversation.spoken
+                                                : root.notch.voiceLevels
+
+                    Repeater {
+                        model: 16
+
+                        Rectangle {
+                            required property int index
+                            readonly property real level: conversationBars.levels[conversationBars.levels.length - 16 + index] ?? 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 3
+                            height: compactConversation.waiting ? 3 : 3 + Math.round(level * level * (root.collapsedHeight - 12))
+                            radius: 1.5
+                            color: compactConversation.tint
+                            // Waiting: a wave of light runs along the dots.
+                            opacity: compactConversation.waiting
+                                     ? 0.3 + 0.7 * Math.max(0, Math.cos((compactConversation.phase - index) * 0.4))
+                                     : 0.45 + level * 0.55
+
+                            Behavior on height { NumberAnimation { duration: 80 } }
+                        }
+                    }
+                }
+                Text {
+                    id: conversationLabel
+                    anchors.left: conversationBars.right
+                    anchors.leftMargin: 10
+                    anchors.right: conversationEnd.left
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    text: compactConversation.state === "listening" ? compactConversation.labels[0]
+                        : compactConversation.state === "transcribing" ? compactConversation.labels[1]
+                        : compactConversation.state === "thinking" ? compactConversation.labels[2]
+                        : compactConversation.state === "speaking" ? compactConversation.labels[3] : ""
+                    color: compactConversation.tint
+                    font.pixelSize: Math.min(12, Math.round(root.collapsedHeight * 0.42))
+                    font.weight: Font.DemiBold
+                }
+                IconButton {
+                    id: conversationEnd
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(26, root.collapsedHeight - 4)
+                    height: width
+                    glyph: "×"
+                    hint: qsTr("End the conversation")
+                    onClicked: root.conversationEnded()
+                }
+            }
+
+            // A transfer or script at work: its ring, name and percentage
+            Item {
+                id: compactActivity
+                anchors.fill: parent
+                visible: root.activityShown
+
+                readonly property var current: root.notch.runningActivities[0]
+                                               ?? ({ kind: "", name: "", percent: 0, state: "running" })
+                readonly property int others: root.notch.runningActivities.length - 1
+                readonly property bool sessions: root.notch.sessions.count > 0
+                readonly property real rightEdge: sessions ? 48 : 12
+                readonly property real fitWidth: {
+                    const left = compactRing.anchors.leftMargin + compactRing.size + 8
+                    const right = compactPercent.implicitWidth + 10 + rightEdge
+                                  + (compactActivityTimer.visible ? compactActivityTimer.implicitWidth + 10 : 0)
+                    const most = 400 + (root.notch.timer ? 60 : 0)
+                    return Math.round(Math.max(root.collapsedWidth + 60, Math.min(most, left + compactActivityName.implicitWidth + right)))
+                }
+
+                ProgressRing {
+                    id: compactRing
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12 + Math.round(root.collapsedHeight * 0.58 * 1.3) + 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: Math.round(root.collapsedHeight * 0.66)
+                    // All of them together when there are several
+                    percent: compactActivity.others > 0 && root.notch.activitiesProgress >= 0
+                             ? root.notch.activitiesProgress * 100 : compactActivity.current.percent
+                    tint: compactActivity.current.state === "paused" ? "#8b909a"
+                        : compactActivity.current.kind === "script" ? "#bf8cff" : "#4c8dff"
+                    glyph: compactActivity.current.kind === "download" ? "↓" : compactActivity.current.kind === "copy" ? "→" : ""
+                }
+                Text {
+                    id: compactActivityName
+                    anchors.left: compactRing.right
+                    anchors.leftMargin: 8
+                    anchors.right: compactActivityTimer.visible ? compactActivityTimer.left : compactPercent.left
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideMiddle
+                    text: compactActivity.current.name
+                          + (compactActivity.others > 0 ? "  " + qsTr("+%1 more").arg(compactActivity.others) : "")
+                    color: "#f2f3f5"
+                    font.pixelSize: Math.min(12, Math.round(root.collapsedHeight * 0.42))
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    id: compactActivityTimer
+                    anchors.right: compactPercent.left
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.notch.timer !== null
+                    text: root.notch.timerIcon + " " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
+                    color: root.notch.timerColor
+                    font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
+                    font.weight: Font.DemiBold
+                    font.features: { "tnum": 1 }
+                }
+                Text {
+                    id: compactPercent
+                    anchors.right: parent.right
+                    anchors.rightMargin: compactActivity.rightEdge
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: compactActivity.current.state === "paused" ? qsTr("paused")
+                        : compactRing.percent >= 0 ? Math.floor(compactRing.percent) + "%" : "…"
+                    color: compactActivity.current.state === "paused" ? "#8b909a" : Qt.lighter(compactRing.tint, 1.25)
+                    font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
+                    font.weight: Font.DemiBold
+                    font.features: { "tnum": 1 }
+                }
             }
 
             LevelIndicator {
@@ -406,7 +619,7 @@ Window {
 
             // The timer's countdown in place of the clock (beside the song while one plays)
             Text {
-                visible: root.notch.timer !== null && !root.levelShown && !root.mediaShown
+                visible: root.notch.timer !== null && !root.levelShown && !root.mediaShown && !root.activityShown && !root.conversationShown
                 anchors.centerIn: parent
                 text: root.notch.timerIcon + " " + timerRow.format(root.notch.timer ? root.notch.timer.endsAt - root.notch.timerNow : 0)
                 color: root.notch.timerColor
@@ -417,7 +630,7 @@ Window {
 
             Text {
                 anchors.centerIn: parent
-                visible: root.settings.showClock && !root.levelShown && !root.mediaShown && root.notch.timer === null
+                visible: root.settings.showClock && !root.levelShown && !root.mediaShown && !root.activityShown && !root.conversationShown && root.notch.timer === null
                 text: root.notch.time
                 color: "#f2f3f5"
                 font.pixelSize: Math.min(13, Math.round(root.collapsedHeight * 0.45))
@@ -430,7 +643,7 @@ Window {
                 anchors.right: parent.right
                 anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
-                visible: root.notch.weather !== null && !root.levelShown && !root.mediaShown
+                visible: root.notch.weather !== null && !root.levelShown && !root.mediaShown && !root.activityShown && !root.conversationShown
                          && root.notch.sessions.count === 0 && !(root.notch.media !== null && root.notch.media.playing)
                 text: root.notch.weatherIcon(root.notch.weather) + " " + (root.notch.weather ? Math.round(root.notch.weather.temperature) + "°" : "")
                 color: "#c9ccd2"
@@ -438,26 +651,12 @@ Window {
                 font.weight: Font.DemiBold
             }
 
-            // Downloads and copies: a thin bar along the bottom edge, between the corners
-            Rectangle {
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 2
-                x: island.bottomLeftRadius * 0.6
-                width: (parent.width - 2 * x) * root.notch.jobsProgress
-                height: 2
-                radius: 1
-                visible: root.notch.jobs.length > 0
-                color: "#4c8dff"
-
-                Behavior on width { NumberAnimation { duration: 250 } }
-            }
-
             // Music playing and no agent at work: its cover. Static, so it costs nothing.
             MediaCard.Cover {
                 anchors.right: parent.right
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                visible: !root.levelShown && !root.mediaShown && root.notch.sessions.count === 0
+                visible: !root.levelShown && !root.mediaShown && !root.activityShown && !root.conversationShown && root.notch.sessions.count === 0
                          && root.notch.media !== null && root.notch.media.playing
                 size: Math.round(root.collapsedHeight * 0.62)
                 url: visible ? root.notch.media.art_url : ""
@@ -469,7 +668,7 @@ Window {
                 anchors.rightMargin: root.mediaShown ? 40 : 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
-                visible: !root.levelShown && root.notch.sessions.count > 0
+                visible: !root.levelShown && !root.conversationShown && root.notch.sessions.count > 0
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
@@ -545,102 +744,51 @@ Window {
                 }
             }
 
-            // Downloads and copies, as in "Downloading film.mkv  54% · 3.2 MB/s"
+            // Downloads, copies and scripts at work (and what just ended), then files being shared
             Repeater {
-                model: root.targetsShown || !root.onActivity ? [] : root.notch.jobs
+                model: root.targetsShown ? []
+                     : (root.onActivity ? root.notch.activities : []).concat(root.notch.uploads.map(u => ({
+                           key: "upload:" + u.id, kind: "upload", name: u.file, status: qsTr("Uploading"),
+                           percent: u.progress * 100, speed: 0, processed: 0, total: 0, state: "running", path: ""
+                       })))
 
-                Column {
+                ProgressRow {
                     required property var modelData
-
                     width: expandedContent.width
-                    spacing: 6
-
-                    Item {
-                        width: parent.width
-                        height: 16
-
-                        Text {
-                            anchors.left: parent.left
-                            anchors.right: jobPercent.left
-                            anchors.rightMargin: 8
-                            elide: Text.ElideMiddle
-                            text: (modelData.title ? modelData.title + "  " : "") + modelData.file
-                            color: "#f2f3f5"
-                            font.pixelSize: 12
-                        }
-                        Text {
-                            id: jobPercent
-                            anchors.right: parent.right
-                            text: modelData.suspended ? qsTr("paused")
-                                  : modelData.percent + "%" + (modelData.speed > 0 ? "  ·  " + root.formatSpeed(modelData.speed) : "")
-                            color: "#8b909a"
-                            font.pixelSize: 12
-                            font.features: { "tnum": 1 }
-                        }
-                    }
-                    Rectangle {
-                        width: parent.width
-                        height: 4
-                        radius: 2
-                        color: "#1affffff"
-
-                        Rectangle {
-                            width: parent.width * modelData.percent / 100
-                            height: parent.height
-                            radius: 2
-                            color: modelData.suspended ? "#8b909a" : "#4c8dff"
-
-                            Behavior on width { NumberAnimation { duration: 250 } }
-                        }
-                    }
+                    activity: modelData
+                    onOpen: path => Qt.openUrlExternally("file://" + encodeURI(path))
+                    onReveal: path => root.bridge.showInFolder(path)
                 }
             }
 
-            // Files being shared, as in "Uploading report.pdf  54%"
-            Repeater {
-                model: root.targetsShown ? [] : root.notch.uploads
+            // Who uses the microphone, camera or screen: "● Microphone: Brave"
+            Flow {
+                width: parent.width
+                spacing: 14
+                visible: root.onActivity && root.opened && root.notch.privacyInUse && root.settings.privacyDots && !root.targetsShown
 
-                Column {
-                    required property var modelData
+                Repeater {
+                    model: [
+                        { apps: root.notch.privacy.microphone, label: qsTr("Microphone"), color: "#ff9f0a" },
+                        { apps: root.notch.privacy.camera, label: qsTr("Camera"), color: "#30d158" },
+                        { apps: root.notch.privacy.screen, label: qsTr("Screen recording"), color: "#bf5af2" }
+                    ].filter(u => u.apps.length > 0)
 
-                    width: expandedContent.width
-                    spacing: 6
-
-                    Item {
-                        width: parent.width
-                        height: 16
-
-                        Text {
-                            anchors.left: parent.left
-                            anchors.right: percent.left
-                            anchors.rightMargin: 8
-                            elide: Text.ElideMiddle
-                            text: qsTr("Uploading %1").arg(modelData.file)
-                            color: "#f2f3f5"
-                            font.pixelSize: 12
-                        }
-                        Text {
-                            id: percent
-                            anchors.right: parent.right
-                            text: Math.round(modelData.progress * 100) + "%"
-                            color: "#8b909a"
-                            font.pixelSize: 12
-                            font.features: { "tnum": 1 }
-                        }
-                    }
-                    Rectangle {
-                        width: parent.width
-                        height: 4
-                        radius: 2
-                        color: "#1affffff"
+                    Row {
+                        required property var modelData
+                        spacing: 6
 
                         Rectangle {
-                            width: parent.width * modelData.progress
-                            height: parent.height
-                            radius: 2
-                            color: "#34c759"
-
-                            Behavior on width { NumberAnimation { duration: 150 } }
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 7
+                            height: 7
+                            radius: 3.5
+                            color: parent.modelData.color
+                        }
+                        Text {
+                            text: parent.modelData.label + ": " + parent.modelData.apps.join(", ")
+                            color: "#c9ccd2"
+                            font.pixelSize: 11
                         }
                     }
                 }
@@ -704,17 +852,21 @@ Window {
                 visible: root.shownTab === "chat"
                 messages: root.notch.chat
                 busy: root.notch.chatBusy
-                mood: root.notch.mood
+                mood: root.notch.faceMood
                 attachments: root.notch.chatAttachments
                 onAttached: paths => root.notch.addChatAttachments(paths)
                 onDetached: path => root.notch.chatAttachments = root.notch.chatAttachments.filter(p => p !== path)
-                onAsked: text => {
-                    const files = root.notch.chatAttachments
-                    const turn = root.bridge.askClaude(text, files.join("\n"), root.settings.chatWeb, root.settings.chatFiles)
-                    root.notch.startChatTurn(turn, text, files)
-                    root.notch.chatAttachments = []
+                voice: root.notch.voice
+                onAsked: text => root.asked(text)
+                onListen: root.listenRequested()
+                onListened: root.bridge.stopListening()
+                onUnheard: root.conversationEnded()
+                speaking: root.notch.speaking
+                onStopped: {
+                    root.conversationEnded()
+                    root.bridge.stopChat()
                 }
-                onStopped: root.bridge.stopChat()
+                onSilenced: root.bridge.stopSpeaking()
                 onCleared: {
                     root.bridge.newChat()
                     root.notch.clearChat()
