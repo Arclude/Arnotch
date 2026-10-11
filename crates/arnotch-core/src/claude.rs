@@ -27,6 +27,9 @@ struct HookInput {
     tool_response: Value,
     #[serde(default)]
     error: Value,
+    /// For PermissionDenied: why auto mode refused the tool.
+    #[serde(default)]
+    reason: Option<String>,
     #[serde(default)]
     message: Option<String>,
     /// For Notification: "permission_prompt", "idle_prompt", "auth_success",
@@ -70,6 +73,12 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
             output: tail(&text_of(&input.error)),
             tool,
         },
+        // Auto mode refused the tool: no PostToolUse follows, so the step ends here.
+        "PermissionDenied" => AgentPhase::ToolResult {
+            ok: false,
+            output: tail(input.reason.as_deref().unwrap_or_default()),
+            tool,
+        },
         "PermissionRequest" => AgentPhase::Permission {
             request_id: input
                 .tool_use_id
@@ -108,6 +117,7 @@ pub fn event_from_hook(json: &str) -> anyhow::Result<Option<Event>> {
         cwd: input.cwd,
         tool_use_id: input.tool_use_id.unwrap_or_default(),
         agent_id: input.agent_id.unwrap_or_default(),
+        agent: String::new(),
         phase,
     }))
 }
@@ -397,6 +407,7 @@ mod tests {
                 cwd: "/home/me/projects/korus".into(),
                 tool_use_id: String::new(),
                 agent_id: String::new(),
+                agent: String::new(),
                 phase: AgentPhase::Tool {
                     tool: "Read".into(),
                     detail: "invoice.ts".into(),
@@ -493,6 +504,25 @@ mod tests {
                 tool: "Bash".into(),
                 ok: false,
                 output: vec!["Command failed with exit code 1".into()],
+            }
+        );
+    }
+
+    #[test]
+    fn auto_mode_denials_end_the_step() {
+        let json = r#"{
+            "session_id": "abc",
+            "hook_event_name": "PermissionDenied",
+            "tool_name": "Bash",
+            "tool_use_id": "toolu_1",
+            "reason": "Create Unsafe Agents"
+        }"#;
+        assert_eq!(
+            phase(json),
+            AgentPhase::ToolResult {
+                tool: "Bash".into(),
+                ok: false,
+                output: vec!["Create Unsafe Agents".into()],
             }
         );
     }
@@ -639,6 +669,7 @@ mod tests {
             cwd: String::new(),
             tool_use_id: String::new(),
             agent_id: String::new(),
+            agent: String::new(),
             phase: AgentPhase::Done,
         };
         assert_eq!(

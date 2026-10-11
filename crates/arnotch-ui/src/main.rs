@@ -47,6 +47,22 @@ fn main() -> anyhow::Result<()> {
         .name("notch-weather".into())
         .spawn(move || watch_weather(cities))?;
 
+    // The other agents' plans, from their own files: cheap to read, so once a minute,
+    // published when they change.
+    std::thread::Builder::new()
+        .name("notch-plans".into())
+        .spawn(|| {
+            let mut shown = None;
+            loop {
+                let plans = arnotch_core::plans::read();
+                if shown.as_ref() != Some(&plans) {
+                    bridge::publish_plans(plans.clone());
+                    shown = Some(plans);
+                }
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            }
+        })?;
+
     let (mail_address, addresses) = std::sync::mpsc::channel();
     _ = bridge::MAIL_ADDRESS.set(mail_address);
     std::thread::Builder::new()
@@ -85,14 +101,6 @@ fn main() -> anyhow::Result<()> {
         .spawn(|| {
             if let Err(err) = arnotch_core::phone::watch(bridge::publish_phone) {
                 tracing::info!("no phone (KDE Connect): {err:#}");
-            }
-        })?;
-
-    std::thread::Builder::new()
-        .name("notch-clipboard".into())
-        .spawn(|| {
-            if let Err(err) = arnotch_core::clipboard::watch_history(bridge::publish_clipboard) {
-                tracing::info!("no clipboard history (Klipper): {err:#}");
             }
         })?;
 

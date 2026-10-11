@@ -30,7 +30,7 @@ command's last `output` lines), `waiting`, `done`, `ended`.
 - Rust (stable)
 - Qt 6 (`qt6-base`, `qt6-declarative`)
 - [LayerShellQt](https://invent.kde.org/plasma/layer-shell-qt) (`layer-shell-qt`) for Wayland
-- `curl`; `secret-tool` (`libsecret`) for *Mail*
+- `curl`; `secret-tool` (`libsecret`) for *Mail*; `sqlite3` for Hermes' token use
 
 Works on Wayland compositors with `wlr-layer-shell` (KDE Plasma, Hyprland, Sway, niri, COSMIC)
 and on X11. GNOME does not support layer-shell yet.
@@ -115,18 +115,23 @@ select a region of the screen with Spectacle; the island then asks where the pic
 the same targets as a drop: a Claude session, the chat, the shelf or a share link. Pictures are
 kept in `~/.cache/arnotch/screenshots` (the newest 20).
 
-Below the files, the *Shelf* tab lists the last eight texts you copied (KDE's clipboard history,
-Klipper); a click copies one again. Entries that look like a private key or an access token are
-hidden on screen but can still be copied.
+## Plan usage
 
-## Claude usage
+The *Activity* tab shows a pill per plan at the top: **● Claude 64%** is the 5-hour window of
+your Claude plan, its dot turning orange past 70% and red past 90%. A click shows the plan's card
+in place of the headline: the 5-hour and weekly windows with how much is used and when each
+resets ("⟳ in 3h 05m", "⟳ Sun 18:00"). A session's card shows its cost and how full its context
+is, and the island opens when the 5-hour window passes 80% and 95%.
 
-The *Activity* tab shows how much of your Claude plan's 5-hour and 7-day limits is used and when
-each resets, and a session's card shows its cost and how full its context is. The island opens
-when the 5-hour window passes 80% and 95%. The numbers come from Claude Code's status line input:
-`contrib/install.sh` points the status line at `arnotchctl statusline`, which passes them on and
-then runs the status line you had before (saved in `~/.config/arnotch/statusline-command`), so it
-looks the same. `--uninstall` puts it back. Limits are shown for Pro and Max plans.
+Claude's numbers come from Claude Code's status line input: `contrib/install.sh` points the
+status line at `arnotchctl statusline`, which passes them on and then runs the status line you had
+before (saved in `~/.config/arnotch/statusline-command`), so it looks the same. `--uninstall`
+puts it back. Limits are shown for Pro and Max plans.
+
+The other agents' plans are read from their own files once a minute. **Codex** writes its rate
+limits (5 hours, week) into its session files in `~/.codex/sessions`. **Hermes** keeps token
+counts in `~/.hermes/state.db` (read with `sqlite3`); its providers have no plan limits to read,
+so its pill shows today's tokens and its card the tokens and cost of today and the last 7 days.
 
 ## Chat
 
@@ -379,6 +384,38 @@ Claude Code shows its own prompt in the terminal at the same time, and doesn't t
 when you answer there. arnotch takes the session carrying on as the answer: the tool's result,
 the agent's next tool, a new prompt or the end of the turn closes the request in the island.
 (An allowed command that runs a long time keeps it up until it finishes.)
+
+## Other coding agents
+
+Codex, Gemini CLI, Antigravity, Cursor, Copilot CLI, OpenCode, Amp and Hermes show up in the
+island like Claude Code: their sessions are listed with the agent's name, and their permission
+requests can be answered with **Allow** and **Deny**. Beside the headline, the *Activity* tab has a
+tile for each agent installed on the computer; a click opens it in a terminal (Konsole, kitty,
+WezTerm, Alacritty, foot or GNOME Terminal) in your home folder.
+
+Connect an agent in the settings (*Agents*) or with `arnotchctl connect <agent>`; `arnotchctl
+connect` lists them and whether they are connected. Connecting adds hooks that call `arnotchctl
+agent-hook <agent>` to the agent's own configuration and keeps a copy of the old file beside it
+(`*.arnotch-backup`). Restart a running agent afterwards.
+
+| Agent | Configuration | Asks in the island before |
+|-------|---------------|---------------------------|
+| Codex | `~/.codex/hooks.json` | what Codex would ask about (`PermissionRequest`) |
+| Gemini CLI | `~/.gemini/settings.json` | commands and file changes |
+| Antigravity | `~/.gemini/antigravity-cli/settings.json` | commands and file changes |
+| Cursor | `~/.cursor/hooks.json` | shell commands and MCP tools |
+| Copilot CLI | `~/.copilot/hooks/arnotch.json` | what Copilot would ask about (`permissionRequest`) |
+| OpenCode | plugin `~/.config/opencode/plugins/arnotch.js` | what OpenCode would ask about |
+| Amp | plugin `~/.config/amp/plugins/arnotch.ts` | commands and file changes |
+| Hermes | `hooks:` in `~/.hermes/config.yaml` | risky commands (`rm`, `sudo`, `git push`, `kill`, `curl … \| sh`, …) |
+
+Hermes runs commands without asking, so the island only asks before the risky ones; its shell
+hooks can block a call but not approve one, so Hermes may still ask about a dangerous command
+itself afterwards. Hermes asks once whether to trust new hooks (or run it with `--accept-hooks`).
+Its config is YAML: when it already has a `hooks:` section, add arnotch's by hand. Without an
+answer within 45 seconds, or when arnotch is not running, every agent carries on as it would
+without arnotch. Only Hermes and Claude Code were tried on a real install; the others follow
+their documentation (2026) and may need adjusting as they change.
 
 ## License
 

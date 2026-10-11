@@ -5,6 +5,7 @@
     "PermissionRequest": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook", "timeout": 600}]}],
     "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "PostToolUseFailure": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
+    "PermissionDenied": [{"matcher": "*", "hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "Notification": [{"hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "Stop": [{"hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}],
     "SessionEnd": [{"hooks": [{"type": "command", "command": "arnotchctl claude-hook"}]}]

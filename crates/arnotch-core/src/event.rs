@@ -5,6 +5,8 @@ use crate::terminals::Terminal;
 /// Everything the notch can display. Sent over the socket as one JSON object per line.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
+// Agent events are the big ones and the most frequent: boxing them would save nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum Event {
     /// A generic message, e.g. from a script: `arnotchctl notify "Build" "done"`.
     Notify {
@@ -12,7 +14,7 @@ pub enum Event {
         #[serde(default)]
         body: String,
     },
-    /// Progress of a coding agent session (Claude Code, ...).
+    /// Progress of a coding agent session (Claude Code, Codex, Hermes, ...).
     Agent {
         session_id: String,
         /// Short project name, usually the basename of the working directory.
@@ -27,6 +29,9 @@ pub enum Event {
         /// The subagent at work, empty for the main agent.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         agent_id: String,
+        /// Which coding agent this is ("codex", "gemini", ...); empty for Claude Code.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        agent: String,
         #[serde(flatten)]
         phase: AgentPhase,
     },
@@ -135,13 +140,13 @@ pub enum Event {
     /// The battery's state; published by the notch itself.
     #[serde(skip_deserializing)]
     Battery { battery: crate::system::Battery },
-    /// The latest text entries of the clipboard history, newest first; published by the
-    /// notch itself.
-    #[serde(skip_deserializing)]
-    Clipboard { items: Vec<crate::clipboard::Entry> },
     /// A Claude Code session's cost and context use, with the account's rate limits;
     /// sent by `arnotchctl statusline` from Claude Code's status line input.
     Usage(crate::claude::Usage),
+    /// The plans of agents other than Claude Code (Codex' limits, Hermes' tokens);
+    /// published by the notch itself.
+    #[serde(skip_deserializing)]
+    Plans { plans: Vec<crate::plans::Plan> },
     /// The phone (KDE Connect): battery, calls, text messages; published by the notch itself.
     #[serde(skip_deserializing)]
     Phone(crate::phone::PhoneEvent),

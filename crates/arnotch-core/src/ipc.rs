@@ -276,6 +276,7 @@ mod tests {
             cwd: String::new(),
             tool_use_id: tool_use_id.into(),
             agent_id: String::new(),
+            agent: String::new(),
             phase,
         }
     }

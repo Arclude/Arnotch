@@ -80,6 +80,14 @@
     </message>
 </context>
 <context>
+    <name>AgentGrid</name>
+    <message>
+        <location filename="../qml/AgentGrid.qml" line="+86"/>
+        <source>not connected</source>
+        <translation>bağlı değil</translation>
+    </message>
+</context>
+<context>
     <name>AttachDialog</name>
     <message>
         <location filename="../qml/AttachDialog.qml" line="+7"/>
@@ -90,7 +98,27 @@
 <context>
     <name>ChatView</name>
     <message>
-        <location filename="../qml/ChatView.qml" line="+41"/>
+        <location filename="../qml/ChatView.qml" line="+52"/>
+        <source>Ask first</source>
+        <translation>Önce sor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accept edits</source>
+        <translation>Düzenlemelere izin ver</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Plan</source>
+        <translation>Plan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Auto</source>
+        <translation>Otomatik</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Searching the web…</source>
         <translation>Web&apos;de arıyor…</translation>
     </message>
@@ -126,6 +154,16 @@
     </message>
     <message>
         <location line="+1"/>
+        <source>Saving a draft in Gmail…</source>
+        <translation>Gmail’e taslak kaydediliyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reading Gmail…</source>
+        <translation>Gmail okunuyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Looking through files…</source>
         <translation>Dosyalara bakıyor…</translation>
     </message>
@@ -140,7 +178,12 @@
         <translation>📎 ile dosya ekle ya da island&apos;a bırak. Claude Code girişini kullanır.</translation>
     </message>
     <message>
-        <location line="+130"/>
+        <location line="+73"/>
+        <source>Carry out the plan</source>
+        <translation>Planı uygula</translation>
+    </message>
+    <message>
+        <location line="+73"/>
         <source>Couldn&apos;t get an answer: %1</source>
         <translation>Cevap alınamadı: %1</translation>
     </message>
@@ -190,7 +233,7 @@
         <translation>Claude&apos;a sor…</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+22"/>
         <source>Stop reading aloud</source>
         <translation>Sesli okumayı durdur</translation>
     </message>
@@ -251,12 +294,42 @@
 <context>
     <name>Island</name>
     <message>
-        <location filename="../qml/Island.qml" line="+514"/>
+        <location filename="../qml/Island.qml" line="+431"/>
+        <source>Listening</source>
+        <translation>Dinliyorum</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Understanding…</source>
+        <translation>Anlıyorum…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Thinking…</source>
+        <translation>Düşünüyor…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Speaking</source>
+        <translation>Konuşuyor</translation>
+    </message>
+    <message>
+        <location line="+90"/>
+        <source>End the conversation</source>
+        <translation>Konuşmayı bitir</translation>
+    </message>
+    <message>
+        <location line="+46"/>
         <source>+%1 more</source>
         <translation>+%1 tane daha</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+22"/>
+        <source>paused</source>
+        <translation>duraklatıldı</translation>
+    </message>
+    <message>
+        <location line="+79"/>
         <source>Pause</source>
         <translation>Duraklat</translation>
     </message>
@@ -266,7 +339,7 @@
         <translation>Oynat</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+98"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
@@ -284,6 +357,11 @@
         <location line="+1"/>
         <source>Shelf</source>
         <translation>Raf</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Mail</source>
+        <translation>Mail</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -311,63 +389,73 @@
         <translation>Ekran kaydı</translation>
     </message>
     <message>
-        <location line="-238"/>
-        <source>paused</source>
-        <translation>duraklatıldı</translation>
-    </message>
-    <message>
-        <location line="-158"/>
-        <source>Listening</source>
-        <translation>Dinliyorum</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Understanding…</source>
-        <translation>Anlıyorum…</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Thinking…</source>
-        <translation>Düşünüyor…</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Speaking</source>
-        <translation>Konuşuyor</translation>
-    </message>
-    <message>
-        <location line="+90"/>
-        <source>End the conversation</source>
-        <translation>Konuşmayı bitir</translation>
-    </message>
-    <message>
-        <location line="+333"/>
+        <location line="+27"/>
         <source>Where should %1 go?</source>
         <translation>%1 nereye gitsin?</translation>
     </message>
+    <message>
+        <location line="+50"/>
+        <source>Summarize this email in a few sentences: what it says, what it asks of me, and whether it needs an answer. Read it with the Gmail tools (message id %1). From: %2 &lt;%3&gt;, subject: %4</source>
+        <translation>Bu e-postayı birkaç cümleyle özetle: ne diyor, benden ne istiyor ve cevap gerekiyor mu. Gmail araçlarıyla oku (mesaj kimliği %1). Gönderen: %2 &lt;%3&gt;, konu: %4</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Write a reply to this email, in its language. Read the message and its thread with the Gmail tools first (message id %1), show me the reply here, and save it in Gmail as a draft with create_draft and replyToMessageId %1. Don&apos;t send it. From: %2 &lt;%3&gt;, subject: %4</source>
+        <translation>Bu e-postaya kendi dilinde bir cevap yaz. Önce mesajı ve dizisini Gmail araçlarıyla oku (mesaj kimliği %1), cevabı bana burada göster ve create_draft ile replyToMessageId %1 kullanarak Gmail&apos;e taslak olarak kaydet. Gönderme. Gönderen: %2 &lt;%3&gt;, konu: %4</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Carry out the plan.</source>
+        <translation>Planı uygula.</translation>
+    </message>
 </context>
 <context>
-    <name>LimitsRow</name>
+    <name>MailView</name>
     <message>
-        <location filename="../qml/LimitsRow.qml" line="+27"/>
-        <source>5 h</source>
-        <translation>5 saat</translation>
+        <location filename="../qml/MailView.qml" line="+46"/>
+        <source>Check now</source>
+        <translation>Şimdi bak</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>7 days</source>
-        <translation>7 gün</translation>
+        <location line="+8"/>
+        <source>Couldn&apos;t check the inbox: %1</source>
+        <translation>Gelen kutusuna bakılamadı: %1</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>%1% · resets %2</source>
-        <translation>%%1 · sıfırlanma %2</translation>
+        <location line="+8"/>
+        <source>Nothing in the inbox from the last 30 days.</source>
+        <translation>Gelen kutusunda son 30 günden bir şey yok.</translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>Returned: not delivered</source>
+        <translation>Geri döndü: teslim edilemedi</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>(no subject)</source>
+        <translation>(konu yok)</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Open in Gmail</source>
+        <translation>Gmail&apos;de aç</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Summarize</source>
+        <translation>Özetle</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Draft a reply</source>
+        <translation>Cevap taslağı yaz</translation>
     </message>
 </context>
 <context>
     <name>Main</name>
     <message>
-        <location filename="../qml/Main.qml" line="+127"/>
+        <location filename="../qml/Main.qml" line="+141"/>
         <source>Claude answered</source>
         <translation>Claude cevapladı</translation>
     </message>
@@ -377,7 +465,12 @@
         <translation>Claude cevap veremedi</translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+19"/>
+        <source>Say yes or no</source>
+        <translation>Evet ya da hayır de</translation>
+    </message>
+    <message>
+        <location line="+154"/>
         <source>Listening</source>
         <translation>Dinliyorum</translation>
     </message>
@@ -461,204 +554,276 @@
 <context>
     <name>NotchState</name>
     <message>
+        <location filename="../qml/NotchState.qml" line="+28"/>
         <source>All quiet</source>
-        <translation type="vanished">Her şey sakin</translation>
+        <translation>Her şey sakin</translation>
     </message>
     <message>
+        <location line="+347"/>
         <source>Finished</source>
-        <translation type="vanished">Bitti</translation>
+        <translation>Bitti</translation>
     </message>
     <message>
+        <location line="+2"/>
         <source>Needs your attention</source>
-        <translation type="vanished">Seni bekliyor</translation>
+        <translation>Seni bekliyor</translation>
     </message>
     <message>
+        <location line="+4"/>
         <source>Plan ready for review</source>
-        <translation type="vanished">Plan onayını bekliyor</translation>
+        <translation>Plan onayını bekliyor</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Claude has a question</source>
-        <translation type="vanished">Claude&apos;un bir sorusu var</translation>
+        <translation>Claude&apos;un bir sorusu var</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Wants to run %1</source>
-        <translation type="vanished">%1 çalıştırmak istiyor</translation>
+        <translation>%1 çalıştırmak istiyor</translation>
     </message>
     <message>
+        <location line="+4"/>
         <source>Thinking…</source>
-        <translation type="vanished">Düşünüyor…</translation>
+        <translation>Düşünüyor…</translation>
     </message>
     <message>
+        <location line="+69"/>
         <source>Link copied</source>
-        <translation type="vanished">Link kopyalandı</translation>
+        <translation>Link kopyalandı</translation>
     </message>
     <message>
+        <location line="+2"/>
         <source>Couldn&apos;t share %1</source>
-        <translation type="vanished">%1 paylaşılamadı</translation>
+        <translation>%1 paylaşılamadı</translation>
     </message>
     <message>
+        <location line="+14"/>
+        <source>Mail returned</source>
+        <translation>Mail geri döndü</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n new mail(s)</source>
+        <translation>
+            <numerusform>%n yeni mail</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n returned</source>
+        <translation>
+            <numerusform>%n geri döndü</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+70"/>
         <source>Focus ended</source>
-        <translation type="vanished">Odak bitti</translation>
+        <translation>Odak bitti</translation>
     </message>
     <message>
+        <location line="+14"/>
         <source>Focus · round %1</source>
-        <translation type="vanished">Odak · %1. tur</translation>
+        <translation>Odak · %1. tur</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Long break</source>
-        <translation type="vanished">Uzun mola</translation>
+        <translation>Uzun mola</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Break</source>
-        <translation type="vanished">Mola</translation>
+        <translation>Mola</translation>
     </message>
     <message>
+        <location line="+16"/>
         <source>%1 min</source>
-        <translation type="vanished">%1 dk</translation>
+        <translation>%1 dk</translation>
     </message>
     <message>
+        <location line="+3"/>
         <source>until %1</source>
-        <translation type="vanished">bitiş %1</translation>
+        <translation>bitiş %1</translation>
     </message>
     <message>
+        <location line="+8"/>
         <source>Nothing came in meanwhile</source>
-        <translation type="vanished">Bu arada bildirim gelmedi</translation>
+        <translation>Bu arada bildirim gelmedi</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Meanwhile: %1</source>
-        <translation type="vanished">Bu arada: %1</translation>
+        <translation>Bu arada: %1</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>%1 notifications meanwhile: %2</source>
-        <translation type="vanished">Bu arada %1 bildirim: %2</translation>
+        <translation>Bu arada %1 bildirim: %2</translation>
     </message>
     <message>
+        <location line="+18"/>
         <source>Clear</source>
-        <translation type="vanished">Açık</translation>
+        <translation>Açık</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Mostly clear</source>
-        <translation type="vanished">Az bulutlu</translation>
+        <translation>Az bulutlu</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Partly cloudy</source>
-        <translation type="vanished">Parçalı bulutlu</translation>
+        <translation>Parçalı bulutlu</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Overcast</source>
-        <translation type="vanished">Kapalı</translation>
+        <translation>Kapalı</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Fog</source>
-        <translation type="vanished">Sisli</translation>
+        <translation>Sisli</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Drizzle</source>
-        <translation type="vanished">Çisenti</translation>
+        <translation>Çisenti</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Rain</source>
-        <translation type="vanished">Yağmurlu</translation>
+        <translation>Yağmurlu</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Snow</source>
-        <translation type="vanished">Karlı</translation>
+        <translation>Karlı</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Showers</source>
-        <translation type="vanished">Sağanak</translation>
+        <translation>Sağanak</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Snow showers</source>
-        <translation type="vanished">Kar sağanağı</translation>
+        <translation>Kar sağanağı</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Thunderstorm</source>
-        <translation type="vanished">Gök gürültülü fırtına</translation>
+        <translation>Gök gürültülü fırtına</translation>
     </message>
     <message>
+        <location line="+15"/>
         <source>Downloaded</source>
-        <translation type="vanished">İndirildi</translation>
+        <translation>İndirildi</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Copied</source>
-        <translation type="vanished">Kopyalandı</translation>
+        <translation>Kopyalandı</translation>
     </message>
     <message>
+        <location line="+20"/>
         <source>✓ %1</source>
-        <translation type="vanished">✓ %1</translation>
+        <translation>✓ %1</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>✗ %1</source>
-        <translation type="vanished">✗ %1</translation>
+        <translation>✗ %1</translation>
     </message>
     <message>
+        <location line="+1"/>
         <source>Done</source>
-        <translation type="vanished">Bitti</translation>
+        <translation>Bitti</translation>
     </message>
     <message>
+        <location line="+0"/>
         <source>Failed</source>
-        <translation type="vanished">Başarısız</translation>
+        <translation>Başarısız</translation>
     </message>
     <message>
+        <location line="+59"/>
         <source>Couldn&apos;t hear you</source>
-        <translation type="vanished">Seni duyamadım</translation>
+        <translation>Seni duyamadım</translation>
     </message>
     <message>
+        <location line="+40"/>
         <source>%1: battery low</source>
-        <translation type="vanished">%1: pil azaldı</translation>
+        <translation>%1: pil azaldı</translation>
     </message>
     <message>
-        <source>Unknown number</source>
-        <translation type="vanished">Bilinmeyen numara</translation>
-    </message>
-    <message>
-        <source>📞 Calling: %1</source>
-        <translation type="vanished">📞 Arıyor: %1</translation>
-    </message>
-    <message>
-        <source>Missed call: %1</source>
-        <translation type="vanished">Cevapsız arama: %1</translation>
-    </message>
-    <message>
-        <source>💬 %1</source>
-        <translation type="vanished">💬 %1</translation>
-    </message>
-    <message>
-        <source>Message</source>
-        <translation type="vanished">Mesaj</translation>
-    </message>
-    <message>
-        <source>%1% of your 5-hour Claude limit used</source>
-        <translation type="vanished">5 saatlik Claude limiti: %%1 kullanıldı</translation>
-    </message>
-    <message>
-        <source>Resets at %1</source>
-        <translation type="vanished">Sıfırlanma: %1</translation>
-    </message>
-    <message>
-        <source>In %1 min: %2</source>
-        <translation type="vanished">%1 dk sonra: %2</translation>
-    </message>
-    <message>
-        <source>Starting now: %1</source>
-        <translation type="vanished">Şimdi başlıyor: %1</translation>
-    </message>
-    <message>
-        <source>Battery low</source>
-        <translation type="vanished">Pil azaldı</translation>
-    </message>
-    <message>
-        <source>⏰ Time&apos;s up</source>
-        <translation type="vanished">⏰ Süre doldu</translation>
-    </message>
-    <message>
-        <source>Timer</source>
-        <translation type="vanished">Zamanlayıcı</translation>
-    </message>
-    <message>
+        <location line="+0"/>
+        <location line="+108"/>
         <source>%1% left</source>
-        <translation type="vanished">%%1 kaldı</translation>
+        <translation>%%1 kaldı</translation>
+    </message>
+    <message>
+        <location line="-95"/>
+        <location line="+29"/>
+        <source>Unknown number</source>
+        <translation>Bilinmeyen numara</translation>
+    </message>
+    <message>
+        <location line="-28"/>
+        <source>📞 Calling: %1</source>
+        <translation>📞 Arıyor: %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Missed call: %1</source>
+        <translation>Cevapsız arama: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>💬 %1</source>
+        <translation>💬 %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+9"/>
+        <source>Message</source>
+        <translation>Mesaj</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>%1% of your 5-hour Claude limit used</source>
+        <translation>5 saatlik Claude limiti: %%1 kullanıldı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Resets at %1</source>
+        <translation>Sıfırlanma: %1</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>In %1 min: %2</source>
+        <translation>%1 dk sonra: %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Starting now: %1</source>
+        <translation>Şimdi başlıyor: %1</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Battery low</source>
+        <translation>Pil azaldı</translation>
+    </message>
+    <message>
+        <location line="+97"/>
+        <source>⏰ Time&apos;s up</source>
+        <translation>⏰ Süre doldu</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Timer</source>
+        <translation>Zamanlayıcı</translation>
     </message>
 </context>
 <context>
@@ -697,6 +862,84 @@
         <location line="+0"/>
         <source>Incoming call</source>
         <translation>Gelen arama</translation>
+    </message>
+</context>
+<context>
+    <name>PlanCard</name>
+    <message>
+        <location filename="../qml/PlanCard.qml" line="+22"/>
+        <source>Week</source>
+        <translation>Hafta</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>5 hours</source>
+        <translation>5 saat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 days</source>
+        <translation>%1 gün</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 h</source>
+        <translation>%1 sa</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>now</source>
+        <translation>şimdi</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>in %1h %2m</source>
+        <translation>%1 sa %2 dk içinde</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>in %1m</source>
+        <translation>%1 dk içinde</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>updated just now</source>
+        <translation>az önce güncellendi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>updated %1 min ago</source>
+        <translation>%1 dk önce güncellendi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>updated %1 h ago</source>
+        <translation>%1 sa önce güncellendi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>updated %1</source>
+        <translation>%1 güncellendi</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>%1 plan</source>
+        <translation>%1 planı</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Today</source>
+        <translation>Bugün</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>7 days</source>
+        <translation>7 gün</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>%1 tokens</source>
+        <translation>%1 token</translation>
     </message>
 </context>
 <context>
@@ -812,7 +1055,7 @@
 <context>
     <name>SessionRow</name>
     <message>
-        <location filename="../qml/SessionRow.qml" line="+19"/>
+        <location filename="../qml/SessionRow.qml" line="+22"/>
         <source>Thinking…</source>
         <translation>Düşünüyor…</translation>
     </message>
@@ -830,12 +1073,17 @@
 <context>
     <name>SettingsWindow</name>
     <message>
-        <location filename="../qml/SettingsWindow.qml" line="+11"/>
+        <location filename="../qml/SettingsWindow.qml" line="+15"/>
         <source>arnotch Settings</source>
         <translation>arnotch Ayarları</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+31"/>
+        <source>Saved</source>
+        <translation>Kaydedildi</translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>Active screen (follows focus)</source>
         <translation>Aktif ekran (odağı takip eder)</translation>
     </message>
@@ -901,11 +1149,12 @@
     </message>
     <message>
         <location line="+5"/>
+        <location line="+242"/>
         <source>Permissions</source>
         <translation>İzinler</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-240"/>
         <source>Answer Claude&apos;s permission requests here</source>
         <translation>Claude&apos;un izin isteklerini burada cevapla</translation>
     </message>
@@ -916,12 +1165,12 @@
     </message>
     <message>
         <location line="+6"/>
-        <location line="+197"/>
+        <location line="+330"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-196"/>
+        <location line="-329"/>
         <source>0x0.st (kept 30 days to 1 year)</source>
         <translation>0x0.st (30 gün ile 1 yıl arası saklanır)</translation>
     </message>
@@ -977,6 +1226,37 @@
     </message>
     <message>
         <location line="+5"/>
+        <source>Mail</source>
+        <translation>Mail</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Gmail address, e.g. you@example.com</source>
+        <translation>Gmail adresi, ör. sen@ornek.com</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>App password saved</source>
+        <translation>Uygulama şifresi kayıtlı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Google app password</source>
+        <translation>Google uygulama şifresi</translation>
+    </message>
+    <message>
+        <location line="-191"/>
+        <location line="+194"/>
+        <source>Save</source>
+        <translation>Kaydet</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>The inbox is checked every 2 minutes over IMAP and new mail opens the island. Make an app password at &lt;a href=&quot;https://myaccount.google.com/apppasswords&quot;&gt;myaccount.google.com/apppasswords&lt;/a&gt; (needs 2-Step Verification); it is kept in KWallet. Summaries and drafts go through Claude&apos;s Gmail connector in claude.ai; nothing is ever sent.</source>
+        <translation>Gelen kutusuna IMAP ile 2 dakikada bir bakılır, yeni mail adayı açar. Uygulama şifresini &lt;a href=&quot;https://myaccount.google.com/apppasswords&quot;&gt;myaccount.google.com/apppasswords&lt;/a&gt; adresinde oluştur (2 Adımlı Doğrulama gerekir); KWallet&apos;te saklanır. Özetler ve taslaklar claude.ai&apos;deki Claude Gmail bağlayıcısıyla yapılır; hiçbir şey gönderilmez.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Focus</source>
         <translation>Odak</translation>
     </message>
@@ -1001,7 +1281,7 @@
         <translation>Odaklanırken bildirimleri beklet</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+55"/>
         <source>Chat</source>
         <translation>Sohbet</translation>
     </message>
@@ -1022,21 +1302,101 @@
     </message>
     <message>
         <location line="+11"/>
-        <source>Opening apps, music, volume and brightness happen right away; other commands wait for your Allow in the island.</source>
-        <translation>Uygulama açma, müzik, ses ve parlaklık hemen yapılır; diğer komutlar adada senin iznini bekler.</translation>
+        <source>Opening apps, music, volume and brightness happen right away; other commands as the permission mode says.</source>
+        <translation>Uygulama açmak, müzik, ses ve parlaklık hemen yapılır; diğer komutlar izin moduna göre.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+14"/>
+        <source>Each change waits for your Allow in the island, unless the mode accepts edits; the chat shows what changed.</source>
+        <translation>Mod düzenlemelere izin vermiyorsa her değişiklik adadaki İzin ver&apos;i bekler; sohbet neyin değiştiğini gösterir.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Auto</source>
+        <translation>Otomatik</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accept edits</source>
+        <translation>Düzenlemelere izin ver</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Plan</source>
+        <translation>Plan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ask first</source>
+        <translation>Önce sor</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Files are changed without asking; commands are asked about in the island.</source>
+        <translation>Dosyalar sormadan değiştirilir; komutlar adada sorulur.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Claude only looks into things and answers with a plan; &quot;Carry out the plan&quot; under it lets it go ahead.</source>
+        <translation>Claude yalnızca inceler ve bir planla cevap verir; altındaki &quot;Planı uygula&quot; ile devam eder.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Every command and change is asked about in the island.</source>
+        <translation>Her komut ve değişiklik adada sorulur.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Claude Code&apos;s classifier lets safe commands through and asks about risky ones; file changes are still asked about.</source>
+        <translation>Claude Code&apos;un sınıflandırıcısı güvenli komutları çalıştırır, riskli olanları sorar; dosya değişiklikleri yine sorulur.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The button next to the chat&apos;s field, or Shift+Tab in it, switches too.</source>
+        <translation>Sohbet alanının yanındaki düğme ya da içinde Shift+Tab da modu değiştirir.</translation>
+    </message>
+    <message>
+        <location line="-47"/>
         <source>Claude can change files</source>
         <translation>Claude dosyaları değiştirebilir</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Each change waits for your Allow in the island; the chat shows what changed.</source>
-        <translation>Her değişiklik adadaki İzin ver onayını bekler; sohbet neyin değiştiğini gösterir.</translation>
+        <location line="-76"/>
+        <source>Agents</source>
+        <translation>Agent&apos;lar</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+27"/>
+        <source>Connected</source>
+        <translation>Bağlı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installed</source>
+        <translation>Kurulu</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not installed</source>
+        <translation>Kurulu değil</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Connect again</source>
+        <translation>Yeniden bağla</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Bağla</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Connecting adds arnotch&apos;s hooks to the agent&apos;s own settings (a copy of the old file is kept beside it), so its sessions show in the island and its permission requests can be answered there. Restart a running agent afterwards. Claude Code is connected by contrib/install.sh --hooks.</source>
+        <translation>Bağlamak, arnotch&apos;un hook&apos;larını agent&apos;ın kendi ayarlarına ekler (eski dosyanın bir kopyası yanında saklanır); böylece oturumları adada görünür ve izin istekleri oradan cevaplanabilir. Çalışan bir agent&apos;ı sonra yeniden başlat. Claude Code, contrib/install.sh --hooks ile bağlanır.</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Model</source>
         <translation>Model</translation>
     </message>
@@ -1092,6 +1452,31 @@
     </message>
     <message>
         <location line="+7"/>
+        <source>Microphone</source>
+        <translation>Mikrofon</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Automatic: a headset&apos;s when plugged in</source>
+        <translation>Otomatik: takılıysa kulaklığınki</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The system&apos;s default</source>
+        <translation>Sistemin varsayılanı</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 (not plugged in)</source>
+        <translation>%1 (takılı değil)</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>For asking by voice and the wake word. A laptop&apos;s own microphone hears the room and the speakers too; a headset&apos;s is understood best.</source>
+        <translation>Sesle sormak ve uyandırma sözü için. Dizüstünün kendi mikrofonu odayı ve hoparlörleri de duyar; en iyi kulaklığınki anlaşılır.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Wake word</source>
         <translation>Uyandırma sözü</translation>
     </message>
@@ -1104,10 +1489,6 @@
         <location line="+17"/>
         <source>Say the name, then your question after the tone, or both at once (&quot;Claude, what&apos;s the weather?&quot;). The microphone stays on, so arnotch shows in the privacy dots; what it hears is turned into text on this computer and nothing is kept. Needs a speech model; base is the quickest: arnotchctl voice-model base</source>
         <translation>Adını söyle, sesten sonra sorunu sor; ya da ikisini birden söyle (&quot;Claude, hava nasıl?&quot;). Mikrofon açık kalır, bu yüzden arnotch gizlilik noktalarında görünür; duyduğu bu bilgisayarda yazıya çevrilir ve hiçbir şey saklanmaz. Bir konuşma modeli gerekir; en hızlısı base: arnotchctl voice-model base</translation>
-    </message>
-    <message>
-        <source>Say the name, then your question after the tone, or both at once (&quot;Arnotch, what&apos;s the weather?&quot;). The microphone stays on, so arnotch shows in the privacy dots; what it hears is turned into text on this computer and nothing is kept. Needs a speech model; base is the quickest: arnotchctl voice-model base</source>
-        <translation type="vanished">Adını söyle, sesten sonra sorunu sor; ya da ikisini birden söyle (&quot;Arnotch, hava nasıl?&quot;). Mikrofon açık kalır, bu yüzden arnotch gizlilik noktalarında görünür; duyduğu bu bilgisayarda yazıya çevrilir ve hiçbir şey saklanmaz. Bir konuşma modeli gerekir; en hızlısı base: arnotchctl voice-model base</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -1158,7 +1539,7 @@
 <context>
     <name>ShelfView</name>
     <message>
-        <location filename="../qml/ShelfView.qml" line="+44"/>
+        <location filename="../qml/ShelfView.qml" line="+42"/>
         <source>Drop files on the island to keep them here</source>
         <translation>Burada saklamak için dosyaları island&apos;a bırak</translation>
     </message>
@@ -1186,21 +1567,6 @@
         <location line="+5"/>
         <source>Remove from shelf</source>
         <translation>Raftan kaldır</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Clipboard</source>
-        <translation>Pano</translation>
-    </message>
-    <message>
-        <location line="+28"/>
-        <source>🔒 Hidden: looks like a key or token</source>
-        <translation>🔒 Gizlendi: anahtar ya da token gibi görünüyor</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Copied</source>
-        <translation>Kopyalandı</translation>
     </message>
 </context>
 <context>

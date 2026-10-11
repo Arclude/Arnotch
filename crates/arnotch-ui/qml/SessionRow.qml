@@ -9,6 +9,9 @@ Item {
     required property string phase
     required property string tool
     required property string detail
+    required property string agent
+    property string agentLabel: ""
+    property color agentColor: "#8b909a"
 
     implicitHeight: 24
 
@@ -51,9 +54,22 @@ Item {
         font.weight: Font.DemiBold
     }
 
+    // Which agent: only worth saying when it isn't Claude Code
+    Text {
+        id: agentText
+        anchors.left: projectLabel.right
+        anchors.leftMargin: visible ? 6 : 0
+        anchors.verticalCenter: parent.verticalCenter
+        visible: row.agent !== "claude"
+        width: visible ? implicitWidth : 0
+        text: row.agentLabel
+        color: row.agentColor
+        font.pixelSize: 11
+    }
+
     Rectangle {
         id: chip
-        anchors.left: projectLabel.right
+        anchors.left: agentText.right
         anchors.leftMargin: 8
         anchors.verticalCenter: parent.verticalCenter
         width: chipLabel.implicitWidth + 12

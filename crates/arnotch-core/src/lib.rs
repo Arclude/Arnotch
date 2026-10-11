@@ -1,6 +1,7 @@
 //! Shared pieces of notch: the event protocol, the IPC socket and
 //! adapters that turn third-party payloads (Claude Code hooks, ...) into events.
 
+pub mod agents;
 pub mod apps;
 pub mod calendar;
 pub mod chat;
@@ -16,6 +17,7 @@ pub mod jobs;
 pub mod mail;
 pub mod media;
 pub mod phone;
+pub mod plans;
 pub mod privacy;
 pub mod route;
 pub mod share;

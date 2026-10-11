@@ -11,7 +11,8 @@ use arnotch_core::event::{ChatState, UploadState};
 use arnotch_core::i18n::{self, tr, trf};
 use arnotch_core::terminals::{self, Terminal};
 use arnotch_core::{
-    Decision, Event, chat, clipboard, control, focus, ipc, media, route, share, speech, voice,
+    Decision, Event, agents, chat, clipboard, control, focus, ipc, media, route, share, speech,
+    voice,
 };
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
@@ -151,6 +152,22 @@ pub mod qobject {
         #[cxx_name = "setMailPassword"]
         fn set_mail_password(self: &NotchBridge, address: &QString, password: &QString) -> QString;
 
+        /// The coding agents, as JSON: `[{ name, label, installed, connected }]`.
+        #[qinvokable]
+        #[cxx_name = "agentStatuses"]
+        fn agent_statuses(self: &NotchBridge) -> QString;
+
+        /// Adds arnotch's hooks to an agent's configuration; returns what went wrong, or
+        /// an empty string.
+        #[qinvokable]
+        #[cxx_name = "connectAgent"]
+        fn connect_agent(self: &NotchBridge, name: &QString) -> QString;
+
+        /// Opens a terminal in `dir` (at home when empty) running an agent; returns what went wrong.
+        #[qinvokable]
+        #[cxx_name = "launchAgent"]
+        fn launch_agent(self: &NotchBridge, name: &QString, dir: &QString) -> QString;
+
         /// Whether an app password is saved for `address`.
         #[qinvokable]
         #[cxx_name = "hasMailPassword"]
@@ -181,11 +198,6 @@ pub mod qobject {
             body: &QString,
             icon: &QString,
         );
-
-        /// Puts text back on the clipboard.
-        #[qinvokable]
-        #[cxx_name = "copyText"]
-        fn copy_text(self: &NotchBridge, text: &QString);
 
         /// Starts a new conversation; Claude forgets the previous one.
         #[qinvokable]
@@ -304,6 +316,15 @@ static WEATHER: Mutex<Option<Event>> = Mutex::new(None);
 pub fn publish_weather(weather: Option<arnotch_core::weather::Weather>) {
     let event = Event::Weather { weather };
     *WEATHER.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
+
+/// The other agents' plans, likewise.
+static PLANS: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_plans(plans: Vec<arnotch_core::plans::Plan>) {
+    let event = Event::Plans { plans };
+    *PLANS.lock().unwrap() = Some(event.clone());
     _ = event_bus().send(event);
 }
 
@@ -556,15 +577,6 @@ fn speak_answer(turn: u32, sentences: std::sync::mpsc::Receiver<String>) {
 
 /// Do Not Disturb while focusing, ended by dropping it.
 static QUIET: Mutex<Option<arnotch_core::system::NotificationInhibitor>> = Mutex::new(None);
-
-/// The clipboard history, likewise.
-static CLIPBOARD: Mutex<Option<Event>> = Mutex::new(None);
-
-pub fn publish_clipboard(items: Vec<arnotch_core::clipboard::Entry>) {
-    let event = Event::Clipboard { items };
-    *CLIPBOARD.lock().unwrap() = Some(event.clone());
-    _ = event_bus().send(event);
-}
 
 pub fn publish_media(player: Option<media::Player>) {
     let event = Event::Media { player };
@@ -939,6 +951,45 @@ impl qobject::NotchBridge {
         }
     }
 
+    pub fn agent_statuses(&self) -> QString {
+        QString::from(&serde_json::to_string(&agents::statuses()).unwrap_or_default())
+    }
+
+    pub fn connect_agent(&self, name: &QString) -> QString {
+        let Some(agent) = agents::Agent::from_name(&name.to_string()) else {
+            return QString::from("unknown agent");
+        };
+        // arnotchctl is installed next to the notch itself.
+        let arnotchctl = std::env::current_exe()
+            .ok()
+            .and_then(|exe| Some(exe.parent()?.join("arnotchctl")))
+            .filter(|path| path.is_file())
+            .unwrap_or_else(|| "arnotchctl".into());
+        match agents::connect(agent, &arnotchctl) {
+            Ok(_) => QString::default(),
+            Err(err) => QString::from(&format!("{err:#}")),
+        }
+    }
+
+    pub fn launch_agent(&self, name: &QString, dir: &QString) -> QString {
+        let Some(agent) = agents::Agent::from_name(&name.to_string()) else {
+            return QString::from("unknown agent");
+        };
+        // In the given folder (the project being worked on) while it exists, else at home.
+        let dir = std::path::PathBuf::from(dir.to_string());
+        let dir = if dir.is_dir() {
+            dir
+        } else {
+            std::env::var_os("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_default()
+        };
+        match agents::launch(agent, &dir) {
+            Ok(()) => QString::default(),
+            Err(err) => QString::from(&format!("{err:#}")),
+        }
+    }
+
     pub fn has_mail_password(&self, address: &QString) -> bool {
         arnotch_core::mail::has_password(address.to_string().trim())
     }
@@ -981,15 +1032,6 @@ impl qobject::NotchBridge {
         std::thread::spawn(move || {
             if let Err(err) = arnotch_core::system::notify(&tag, &summary, &body, &icon, 4000) {
                 tracing::warn!("cannot notify: {err:#}");
-            }
-        });
-    }
-
-    pub fn copy_text(&self, text: &QString) {
-        let text = text.to_string();
-        std::thread::spawn(move || {
-            if let Err(err) = clipboard::copy(&text) {
-                tracing::warn!("cannot copy: {err:#}");
             }
         });
     }
@@ -1181,9 +1223,9 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
         let replay = [
             TERMINALS.lock().unwrap().clone(),
             MEDIA.lock().unwrap().clone(),
-            CLIPBOARD.lock().unwrap().clone(),
             CALENDAR.lock().unwrap().clone(),
             WEATHER.lock().unwrap().clone(),
+            PLANS.lock().unwrap().clone(),
             MAIL.lock().unwrap().clone(),
             JOBS.lock().unwrap().clone(),
             PHONE.lock().unwrap().clone(),

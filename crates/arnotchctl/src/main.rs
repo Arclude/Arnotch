@@ -22,6 +22,11 @@
 //!   arnotchctl settings                open the settings window
 //!   arnotchctl terminals               list open terminals and what runs in them
 //!   arnotchctl claude-hook             forward a Claude Code hook payload read from stdin
+//!   arnotchctl agent-hook <agent>      forward another agent's hook payload (codex, gemini,
+//!                                    antigravity, cursor, copilot, opencode, amp, hermes)
+//!   arnotchctl connect [agent]         add arnotch's hooks to an agent's configuration;
+//!                                    without a name, list the agents and whether they are
+//!                                    connected
 //!   arnotchctl statusline              Claude Code status line: forwards usage, then runs
 //!                                     the previous status line command
 //!   arnotchctl send '<json event>'     send a raw event
@@ -34,12 +39,12 @@ use arnotch_core::event::{ListenAction, ProgressState};
 use arnotch_core::i18n::{tr, trf};
 use arnotch_core::route::{self, Model};
 use arnotch_core::terminals::{self, Terminal};
-use arnotch_core::{AgentPhase, Decision, Event, claude, control, ipc};
+use arnotch_core::{AgentPhase, Decision, Event, agents, claude, control, ipc};
 
 const USAGE: &str = "usage:
   arnotchctl notify <title> [body]
-  arnotchctl open [activity|chat|terminals|shelf|phone]
-  arnotchctl toggle [activity|chat|terminals|shelf|phone]
+  arnotchctl open [activity|chat|terminals|shelf|phone|mail]
+  arnotchctl toggle [activity|chat|terminals|shelf|phone|mail]
   arnotchctl close
   arnotchctl timer <25m|1h30m|90s|10> [label] | cancel
   arnotchctl focus [25m|50] | stop
@@ -56,6 +61,8 @@ const USAGE: &str = "usage:
   arnotchctl settings
   arnotchctl terminals
   arnotchctl claude-hook        (reads the hook JSON from stdin)
+  arnotchctl agent-hook <codex|gemini|antigravity|cursor|copilot|opencode|amp|hermes>
+  arnotchctl connect [codex|gemini|antigravity|cursor|copilot|opencode|amp|hermes]
   arnotchctl send '<json event>'";
 
 fn main() -> ExitCode {
@@ -179,6 +186,26 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["claude-hook"] => claude_hook(),
+        ["agent-hook", name] => match agents::Agent::from_name(name) {
+            Some(agent) => agent_hook(agent),
+            None => ExitCode::SUCCESS,
+        },
+        ["connect"] => {
+            for agent in agents::statuses() {
+                println!(
+                    "{:<12} {:<16} {}",
+                    agent.name,
+                    agent.label,
+                    match (agent.installed, agent.connected) {
+                        (_, true) => tr("connected"),
+                        (true, false) => tr("installed, not connected"),
+                        (false, false) => tr("not installed"),
+                    }
+                );
+            }
+            ExitCode::SUCCESS
+        }
+        ["connect", name] => connect(name),
         // Started by claude-hook, detached: switches the session's model, then types the
         // prompt again.
         ["route-resend", terminal, model, effort, prompt] => {
@@ -487,6 +514,66 @@ fn claude_hook() -> ExitCode {
         _ = ipc::send(&event);
     }
     ExitCode::SUCCESS
+}
+
+/// Like [`claude_hook`] for another agent. Always succeeds: a missing or broken notch must
+/// never block the agent.
+fn agent_hook(agent: agents::Agent) -> ExitCode {
+    let mut input = String::new();
+    if std::io::stdin().read_to_string(&mut input).is_err() {
+        return ExitCode::SUCCESS;
+    }
+    let passive = agents::passive_output(agent, &input);
+    let Some(event) = agents::event_from_hook(agent, &input) else {
+        if let Some(output) = passive {
+            println!("{output}");
+        }
+        return ExitCode::SUCCESS;
+    };
+    if let Event::Agent {
+        phase: AgentPhase::Permission { .. },
+        ..
+    } = event
+    {
+        // Without an answer in the island, the agent asks in its terminal as usual.
+        let reply = ipc::request(&event, permission_timeout())
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        if let Some(output) = agents::permission_output(agent, &reply, &input) {
+            println!("{output}");
+        }
+    } else {
+        _ = ipc::send(&event);
+        if let Some(output) = passive {
+            println!("{output}");
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+fn connect(name: &str) -> ExitCode {
+    let Some(agent) = agents::Agent::from_name(name) else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    let program = std::env::current_exe().unwrap_or_else(|_| "arnotchctl".into());
+    match agents::connect(agent, &program) {
+        Ok(path) => {
+            println!(
+                "{}",
+                trf(
+                    "{} now reports to arnotch ({})",
+                    &[&agent.label(), &path.display()]
+                )
+            );
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("arnotchctl: {err:#}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// What the router remembers of a Claude Code session between prompts.

@@ -11,6 +11,10 @@ Item {
     property string mood: "idle"
     property real size: 40
     property color badge: "transparent"
+    // The head's colour, top and bottom: white for the notch itself, an agent's colour for
+    // its tile.
+    property color tint: "#ffffff"
+    property color shade: "#d9dee7"
     // While listening: how loud the voice is, from 0 to 1
     property real level: 0
 
@@ -41,8 +45,8 @@ Item {
         anchors.fill: parent
         radius: height * 0.34
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#ffffff" }
-            GradientStop { position: 1.0; color: "#d9dee7" }
+            GradientStop { position: 0.0; color: face.tint }
+            GradientStop { position: 1.0; color: face.shade }
         }
         transform: Translate { id: bob }
 

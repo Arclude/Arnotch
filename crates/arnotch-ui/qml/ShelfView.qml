@@ -1,7 +1,7 @@
 import QtQuick
 
 // Files kept on the shelf. Each one can be dragged out into another app,
-// shared, sent to Claude, opened or removed. Below them, the clipboard history.
+// shared, sent to Claude, opened or removed.
 Column {
     id: view
 
@@ -9,8 +9,6 @@ Column {
     required property var bridge
     required property var claudeTerminals
     required property bool sharingOn
-    // Latest text entries of the clipboard history, newest first: [{ text, secret }]
-    required property var clipboard
 
     signal remove(string path)
     signal share(string path)
@@ -152,75 +150,6 @@ Column {
                     tint: "#8b909a"
                     onClicked: view.remove(row.modelData)
                 }
-            }
-        }
-    }
-
-    // Recently copied text (KDE's clipboard history); a click copies it again.
-    Text {
-        visible: view.clipboard.length > 0
-        topPadding: 6
-        text: qsTr("Clipboard")
-        color: "#8b909a"
-        font.pixelSize: 11
-        font.weight: Font.DemiBold
-    }
-
-    Repeater {
-        model: view.clipboard
-
-        Rectangle {
-            id: clip
-
-            required property var modelData
-            property bool copied: false
-
-            width: view.width
-            height: 28
-            radius: 8
-            color: clipArea.pressed ? "#264c8dff" : clipArea.containsMouse ? "#1affffff" : "#0dffffff"
-
-            Text {
-                anchors.left: parent.left
-                anchors.right: copiedMark.left
-                anchors.leftMargin: 12
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                elide: Text.ElideRight
-                // One line: line breaks shown as ⏎. Keys and tokens stay hidden.
-                text: clip.modelData.secret ? qsTr("🔒 Hidden: looks like a key or token")
-                                            : clip.modelData.text.trim().replace(/\s*\n\s*/g, "  ⏎  ")
-                color: clip.modelData.secret ? "#8b909a" : "#c9ccd2"
-                font.pixelSize: 12
-                textFormat: Text.PlainText
-            }
-
-            Text {
-                id: copiedMark
-                anchors.right: parent.right
-                anchors.rightMargin: 12
-                anchors.verticalCenter: parent.verticalCenter
-                text: clip.copied ? qsTr("Copied") : ""
-                color: "#34c759"
-                font.pixelSize: 10
-            }
-
-            MouseArea {
-                id: clipArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    view.bridge.copyText(clip.modelData.text)
-                    clip.copied = true
-                    copiedTimer.restart()
-                }
-            }
-
-            Timer {
-                id: copiedTimer
-                interval: 1200
-                onTriggered: clip.copied = false
             }
         }
     }

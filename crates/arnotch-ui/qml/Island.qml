@@ -89,12 +89,53 @@ Window {
     readonly property bool onActivity: shownTab === "activity"
 
     // Show the detailed activity card instead of the headline.
-    readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying
+    // (A plan chosen from the usage pills takes its place.)
+    readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying && shownPlan === null
                                      && (notch.focus.steps.length > 0 || !!notch.focus.permission)
     readonly property int expandedWidth: targetsShown ? 620
                                        : shownTab === "terminals" || shownTab === "shelf" || shownTab === "mail" ? 540
-                                       : showCard || shownTab === "chat" ? 640 : 470
+                                       : showCard || shownTab === "chat" || agentsShown ? 640 : 470
     readonly property int maxExpandedWidth: 640
+    // The agents' tiles beside the headline, when the user opened the island
+    readonly property bool agentsShown: onActivity && opened && !showCard && !targetsShown && agentGrid.agents.length > 0
+
+    // The usage pills: Claude's limits from its status line, then the other agents' plans.
+    readonly property var planItems: {
+        const items = []
+        const limits = notch.limits
+        const brief = name => notch.agentLabel(name).replace(" CLI", "").replace(" Code", "")
+        if (limits) {
+            const windows = [limits.five_hour, limits.seven_day].filter(w => w)
+            if (windows.length)
+                items.push({ key: "claude", label: brief("claude"), text: Math.round(windows[0].used_percent) + "%",
+                             used: Math.max(...windows.map(w => w.used_percent)) })
+        }
+        for (const plan of notch.plans) {
+            if (plan.windows && plan.windows.length)
+                items.push({ key: plan.agent, label: brief(plan.agent), text: Math.round(plan.windows[0].used_percent) + "%",
+                             used: Math.max(...plan.windows.map(w => w.used_percent)) })
+            else if (plan.tokens)
+                items.push({ key: plan.agent, label: brief(plan.agent), used: -1,
+                             text: plan.tokens.today >= 1000 ? Math.round(plan.tokens.today / 1000) + "k"
+                                 : plan.tokens.today > 0 ? String(plan.tokens.today) : "–" })
+        }
+        return items
+    }
+    // The plan whose card is shown, in PlanCard's shape, or null
+    readonly property var shownPlan: {
+        const key = notch.planShown
+        if (!key || !planItems.some(item => item.key === key))
+            return null
+        if (key === "claude") {
+            const limits = notch.limits
+            return { key: "claude", label: "Claude", name: "", tokens: null, updated: notch.limitsUpdated,
+                     windows: [limits.five_hour ? Object.assign({ minutes: 300 }, limits.five_hour) : null,
+                               limits.seven_day ? Object.assign({ minutes: 10080 }, limits.seven_day) : null].filter(w => w) }
+        }
+        const plan = notch.plans.find(p => p.agent === key)
+        return { key: key, label: notch.agentLabel(key).replace(" CLI", ""), name: plan.name ?? "",
+                 windows: plan.windows ?? [], tokens: plan.tokens ?? null, updated: plan.updated * 1000 }
+    }
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
 
     readonly property bool wantsKeyboard: expanded && (terminalsView.editingId !== "" || activityCard.wantsKeyboard
@@ -122,6 +163,8 @@ Window {
 
     // Opened by a click; closed by another click or when the pointer leaves.
     property bool opened: false
+    // A plan card is for a look while the island is open; next time it shows the activity.
+    onOpenedChanged: if (!opened) notch.planShown = ""
     readonly property bool expanded: opened
                                      || (notch.alerting && settings.autoExpand)
                                      || (notch.showingActivity && settings.liveActivity)
@@ -840,7 +883,6 @@ Window {
                 width: parent.width
                 visible: root.shownTab === "shelf"
                 shelf: root.notch.shelf
-                clipboard: root.notch.clipboard
                 bridge: root.bridge
                 claudeTerminals: root.notch.claudeTerminals
                 sharingOn: root.sharingOn
@@ -920,6 +962,15 @@ Window {
                 onFocused: root.opened = false
             }
 
+            // Usage of the plans; a click shows one in place of the headline.
+            UsagePills {
+                visible: root.onActivity && root.opened && !root.targetsShown && root.planItems.length > 0
+                items: root.planItems
+                notch: root.notch
+                chosen: root.notch.planShown
+                onToggled: key => root.notch.planShown = root.notch.planShown === key ? "" : key
+            }
+
             ActivityCard {
                 id: activityCard
                 width: parent.width
@@ -947,35 +998,73 @@ Window {
                 }
             }
 
-            Row {
-                visible: root.onActivity && !root.showCard
-                spacing: 14
+            // The face and what's new (or a plan), with the agents' tiles beside it
+            Item {
+                id: headline
 
-                Face {
-                    size: 44
-                    mood: root.notch.mood
-                    badge: root.notch.mood === "idle" || root.notch.mood === "happy" ? "transparent" : root.moodColor
-                }
+                readonly property real leftWidth: root.agentsShown ? width - agentGrid.width - 14 : width
+
+                width: parent.width
+                height: Math.max(left.implicitHeight, root.agentsShown ? agentGrid.implicitHeight : 0)
+                visible: root.onActivity && !root.showCard
 
                 Column {
+                    id: left
+                    width: headline.leftWidth
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
 
-                    Text {
-                        width: expandedContent.width - 90
-                        elide: Text.ElideRight
-                        text: root.notch.headline
-                        color: "#f2f3f5"
-                        font.pixelSize: 15
-                        font.weight: Font.DemiBold
+                    PlanCard {
+                        width: parent.width
+                        visible: root.shownPlan !== null
+                        plan: root.shownPlan ?? ({ key: "claude", label: "", name: "", windows: [], tokens: null, updated: 0 })
+                        notch: root.notch
+                        now: root.notch.now
                     }
-                    Text {
-                        width: expandedContent.width - 90
-                        elide: Text.ElideRight
-                        text: root.notch.subline || root.notch.time
-                        color: "#8b909a"
-                        font.pixelSize: 12
+
+            Row {
+                        visible: root.onActivity && !root.showCard
+                        spacing: 14
+
+                        Face {
+                            size: 44
+                            mood: root.notch.mood
+                            badge: root.notch.mood === "idle" || root.notch.mood === "happy" ? "transparent" : root.moodColor
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+
+                            Text {
+                                width: headline.leftWidth - 90
+                                elide: Text.ElideRight
+                                text: root.notch.headline
+                                color: "#f2f3f5"
+                                font.pixelSize: 15
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                width: headline.leftWidth - 90
+                                elide: Text.ElideRight
+                                text: root.notch.subline || root.notch.time
+                                color: "#8b909a"
+                                font.pixelSize: 12
+                            }
+                        }
                     }
+                }
+
+                AgentGrid {
+                    id: agentGrid
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 300
+                    visible: root.agentsShown
+                    active: root.opened
+                    bridge: root.bridge
+                    notch: root.notch
+                    folder: root.notch.focus?.cwd ?? ""
+                    onLaunched: root.opened = false
                 }
             }
 
@@ -1023,13 +1112,6 @@ Window {
                 onExtended: seconds => root.notch.extendTimer(seconds)
             }
 
-            LimitsRow {
-                width: parent.width
-                visible: root.onActivity && root.opened && root.notch.limits !== null
-                windows: root.notch.limits
-                now: root.notch.now
-            }
-
             MeetingRow {
                 width: parent.width
                 visible: root.onActivity && root.notch.nextMeeting !== null && (!root.showCard || root.opened)
@@ -1056,6 +1138,8 @@ Window {
 
                     SessionRow {
                         width: expandedContent.width
+                        agentLabel: root.notch.agentLabel(agent)
+                        agentColor: root.notch.agentColor(agent)
                         // The focused session already has the card.
                         visible: !root.showCard || sessionId !== root.notch.focusId
                     }

@@ -205,6 +205,30 @@ pub fn launch(app: &App) -> anyhow::Result<()> {
     anyhow::bail!("cannot start {} ({})", app.name, app.id)
 }
 
+/// Whether `program` can be run: on the PATH, or in the user's own bin folders, which the
+/// notch's service may not have on its PATH (npm, bun, cargo and installer scripts put
+/// agents there).
+pub fn on_path(program: &str) -> bool {
+    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .chain(
+            [
+                ".local/bin",
+                ".cargo/bin",
+                ".npm-global/bin",
+                ".bun/bin",
+                ".opencode/bin",
+                ".amp/bin",
+            ]
+            .iter()
+            .map(|dir| home.join(dir)),
+        )
+        .any(|dir| dir.join(program).is_file())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

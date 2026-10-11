@@ -139,6 +139,10 @@ fn turkish(text: &str) -> Option<&'static str> {
         "Upload failed: {}" => "Yükleme başarısız: {}",
         "no link returned" => "link gelmedi",
         "Cannot run curl" => "curl çalıştırılamadı",
+        "connected" => "bağlı",
+        "installed, not connected" => "kurulu, bağlı değil",
+        "not installed" => "kurulu değil",
+        "{} now reports to arnotch ({})" => "{} artık arnotch'a bildiriyor ({})",
         "No clipboard tool found (install wl-clipboard)" => {
             "Pano aracı bulunamadı (wl-clipboard'u kur)"
         }

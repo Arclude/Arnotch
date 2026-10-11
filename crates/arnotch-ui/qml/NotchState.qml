@@ -21,7 +21,7 @@ QtObject {
         focusRevision // dependency
         const row = sessions.get(indexOf(focusId))
         const detail = details[focusId]
-        return row && detail ? Object.assign({ project: row.project, phase: row.phase, message: row.detail }, detail) : null
+        return row && detail ? Object.assign({ project: row.project, agent: row.agent, agentLabel: agentLabel(row.agent), phase: row.phase, message: row.detail }, detail) : null
     }
 
     // Latest thing worth saying, shown next to the big face.
@@ -47,6 +47,45 @@ QtObject {
     property var battery: null
     // Main binds this to the setting.
     property bool indicators: true
+
+    // The coding agents: name → { label, color }. Sessions without a name are Claude Code's.
+    readonly property var agentInfo: ({
+        claude: { label: "Claude Code", color: "#e08a68" },
+        codex: { label: "Codex", color: "#3fd0c3" },
+        gemini: { label: "Gemini CLI", color: "#8fb4ff" },
+        antigravity: { label: "Antigravity", color: "#f29ad8" },
+        cursor: { label: "Cursor", color: "#d5d8de" },
+        copilot: { label: "Copilot CLI", color: "#a9a3ff" },
+        opencode: { label: "OpenCode", color: "#4fd68a" },
+        amp: { label: "Amp", color: "#f5a524" },
+        hermes: { label: "Hermes", color: "#c58bf2" }
+    })
+    function agentLabel(name) { return (agentInfo[name || "claude"] ?? agentInfo.claude).label }
+    function agentColor(name) { return (agentInfo[name || "claude"] ?? agentInfo.claude).color }
+
+    // A tool's name for people: "mcp__claude-in-chrome__browser_batch" is
+    // "claude-in-chrome · browser batch", "mcp__plugin_claude-mem_mcp-search__search" is
+    // "claude-mem · search", "mcp__claude_ai_Gmail__send_message" is "Gmail · send message".
+    function toolLabel(tool) {
+        if (!tool || !tool.startsWith("mcp__"))
+            return tool || ""
+        const parts = tool.slice(5).split("__")
+        let server = parts[0]
+        if (server.startsWith("plugin_"))
+            server = server.split("_")[1] || server
+        server = server.replace(/^claude_ai_/, "").replace(/_/g, " ")
+        const name = parts.slice(1).join(" ").replace(/_/g, " ")
+        return name ? `${server} · ${name}` : server
+    }
+
+    // Other agents' plans: [{ agent, name, windows: [{ minutes, used_percent, resets_at }],
+    // tokens: { today, week, cost_today_usd, cost_week_usd }, updated }]
+    property var plans: []
+    // When the Claude limits last came, ms since the epoch
+    property real limitsUpdated: 0
+    // The plan shown in the activity tab instead of the headline ("claude", "codex", ...),
+    // "" for none
+    property string planShown: ""
 
     // The Claude plan's rate limits, from the latest status line: { five_hour, seven_day },
     // each { used_percent, resets_at } or absent (API key users have none).
@@ -153,8 +192,6 @@ QtObject {
     // Reminders already given, by start and title
     property var reminded: ({})
 
-    // Latest text entries of the clipboard history, newest first
-    property var clipboard: []
 
     // What's playing (see MediaCard), null when no player has a track.
     property var media: null
@@ -282,8 +319,8 @@ QtObject {
         } else if (ev.type === "calendar") {
             meetings = ev.meetings
             remindMeetings()
-        } else if (ev.type === "clipboard") {
-            clipboard = ev.items
+        } else if (ev.type === "plans") {
+            plans = ev.plans
         } else if (ev.type === "mail") {
             handleMail(ev)
         } else if (ev.type === "media") {
@@ -320,14 +357,19 @@ QtObject {
             return
         }
 
+        // A permission request must be seen: the plan card makes way for it.
+        if (ev.phase === "permission")
+            planShown = ""
+
         // A tool result keeps the session in its "tool" phase: the agent carries on.
         // A permission request is a way of waiting for the user.
         const phase = ev.phase === "tool_result" ? "tool" : ev.phase === "permission" ? "waiting" : ev.phase
         const row = {
             sessionId: id,
             project: ev.project || "?",
+            agent: ev.agent || "claude",
             phase: phase,
-            tool: ev.tool || "",
+            tool: toolLabel(ev.tool),
             detail: ev.phase === "tool_result" && index >= 0 ? sessions.get(index).detail
                                                               : ev.detail || ev.message || ev.prompt || "",
             updated: Date.now()
@@ -352,14 +394,14 @@ QtObject {
             // Plans and questions take reading: they stay up as long as arnotchctl waits.
             const needsInput = ev.plan != null || ev.questions != null
             say(ev.project, ev.plan != null ? qsTr("Plan ready for review") : ev.questions != null ? qsTr("Claude has a question")
-                            : qsTr("Wants to run %1").arg(ev.tool), needsInput ? promptTimeout : permissionTimeout)
-            permissionRequested(ev.request_id)
+                            : qsTr("Wants to run %1").arg(toolLabel(ev.tool)), needsInput ? promptTimeout : permissionTimeout)
+            permissionRequested(ev.request_id, id)
         } else if (ev.phase === "started") {
             headline = ev.project
             subline = ev.prompt || qsTr("Thinking…")
         } else if (ev.phase === "tool") {
             headline = ev.project
-            subline = ev.detail ? `${ev.tool} · ${ev.detail}` : ev.tool
+            subline = ev.detail ? `${toolLabel(ev.tool)} · ${ev.detail}` : toolLabel(ev.tool)
         }
     }
 
@@ -369,14 +411,14 @@ QtObject {
             d.cwd = ev.cwd
 
         if (ev.phase === "permission") {
-            d.permission = { request_id: ev.request_id, tool: ev.tool, detail: ev.detail, diff: ev.diff ?? null,
+            d.permission = { request_id: ev.request_id, tool: ev.tool, label: toolLabel(ev.tool), detail: ev.detail, diff: ev.diff ?? null,
                              plan: ev.plan ?? null, questions: ev.questions ?? null }
         } else if (ev.phase === "started") {
             d.prompt = ev.prompt || ""
             d.steps = []
             d.view = ""
         } else if (ev.phase === "tool") {
-            d.steps = d.steps.concat([{ tool: ev.tool, detail: ev.detail, status: "running" }]).slice(-maxSteps)
+            d.steps = d.steps.concat([{ tool: ev.tool, label: toolLabel(ev.tool), detail: ev.detail, status: "running" }]).slice(-maxSteps)
             if (ev.diff) {
                 d.view = "diff"
                 d.diff = ev.diff
@@ -771,6 +813,7 @@ QtObject {
         if (!ev.five_hour && !ev.seven_day)
             return
         limits = { five_hour: ev.five_hour ?? null, seven_day: ev.seven_day ?? null }
+        limitsUpdated = Date.now()
         // Crossing 80% and 95% of the 5-hour window opens the island once per window.
         const w = ev.five_hour
         if (!w)

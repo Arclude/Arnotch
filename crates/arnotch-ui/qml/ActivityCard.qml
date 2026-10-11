@@ -70,7 +70,7 @@ Item {
                 width: parent.width
                 elide: Text.ElideRight
                 text: card.session.phase === "waiting" ? card.session.message
-                    : card.session.prompt || "Claude Code"
+                    : card.session.prompt || card.session.agentLabel || "Claude Code"
                 color: card.session.phase === "waiting" ? "#ffb020" : "#8b909a"
                 font.pixelSize: 11
             }
@@ -133,7 +133,7 @@ Item {
                         }
                     }
                     Text {
-                        text: step.modelData.tool
+                        text: step.modelData.label ?? step.modelData.tool
                         color: step.modelData.status === "running" ? "#f2f3f5" : "#8b909a"
                         font.pixelSize: 12
                     }
@@ -177,7 +177,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
                     text: card.mode === "prompt" ? (card.permission.plan != null ? qsTr("Approve the plan?") : qsTr("Claude asks"))
-                        : card.permission ? qsTr("Allow %1?").arg(card.permission.tool) + (card.mode === "diff" && card.shownDiff ? "  " + card.shownDiff.file : "")
+                        : card.permission ? qsTr("Allow %1?").arg(card.permission.label ?? card.permission.tool) + (card.mode === "diff" && card.shownDiff ? "  " + card.shownDiff.file : "")
                         : card.mode === "diff" ? (card.shownDiff ? card.shownDiff.file : "")
                         : "$ " + card.session.command
                     color: "#c9ccd2"

@@ -302,6 +302,55 @@ ApplicationWindow {
                     }
                 }
 
+                Label { text: qsTr("Agents") }
+                ColumnLayout {
+                    id: agentSettings
+                    Layout.fillWidth: true
+
+                    // [{ name, label, installed, connected }]
+                    property var agents: JSON.parse(win.bridge.agentStatuses())
+                    property string problem: ""
+
+                    Repeater {
+                        model: agentSettings.agents.filter(a => a.name !== "claude")
+
+                        RowLayout {
+                            id: agentRow
+
+                            required property var modelData
+
+                            Layout.fillWidth: true
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: agentRow.modelData.label
+                                opacity: agentRow.modelData.installed || agentRow.modelData.connected ? 1 : 0.5
+                            }
+                            Label {
+                                opacity: 0.7
+                                font.pixelSize: 11
+                                text: agentRow.modelData.connected ? qsTr("Connected")
+                                    : agentRow.modelData.installed ? qsTr("Installed") : qsTr("Not installed")
+                            }
+                            Button {
+                                text: agentRow.modelData.connected ? qsTr("Connect again") : qsTr("Connect")
+                                onClicked: {
+                                    agentSettings.problem = win.bridge.connectAgent(agentRow.modelData.name)
+                                    agentSettings.agents = JSON.parse(win.bridge.agentStatuses())
+                                }
+                            }
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        text: agentSettings.problem !== "" ? agentSettings.problem
+                            : qsTr("Connecting adds arnotch's hooks to the agent's own settings (a copy of the old file is kept beside it), so its sessions show in the island and its permission requests can be answered there. Restart a running agent afterwards. Claude Code is connected by contrib/install.sh --hooks.")
+                    }
+                }
+
                 Label { text: qsTr("Chat") }
                 Column {
                     Switch {
