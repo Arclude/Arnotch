@@ -6,6 +6,8 @@ ApplicationWindow {
     id: win
 
     required property var settings
+    // NotchState: what the settings offer to choose from (the microphones)
+    required property var notch
     readonly property bool sharingOn: settings.shareService !== "off"
 
     title: qsTr("arnotch Settings")
@@ -317,6 +319,40 @@ ApplicationWindow {
                     ]
                     Component.onCompleted: currentIndex = indexOfValue(win.settings.speakAnswers)
                     onActivated: win.settings.speakAnswers = currentValue
+                }
+
+                Label { text: qsTr("Microphone") }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    ComboBox {
+                        id: microphone
+                        Layout.fillWidth: true
+                        textRole: "text"
+                        valueRole: "value"
+                        model: {
+                            const choices = [
+                                { text: qsTr("Automatic: a headset's when plugged in"), value: "" },
+                                { text: qsTr("The system's default"), value: "default" }
+                            ]
+                            for (const input of win.notch.microphones)
+                                choices.push({ text: input.description, value: input.name })
+                            // Chosen but unplugged: still shown, so the choice isn't lost.
+                            if (!choices.some(c => c.value === win.settings.microphone))
+                                choices.push({ text: qsTr("%1 (not plugged in)").arg(win.settings.microphone),
+                                               value: win.settings.microphone })
+                            return choices
+                        }
+                        onModelChanged: currentIndex = indexOfValue(win.settings.microphone)
+                        Component.onCompleted: currentIndex = indexOfValue(win.settings.microphone)
+                        onActivated: win.settings.microphone = currentValue
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        text: qsTr("For asking by voice and the wake word. A laptop's own microphone hears the room and the speakers too; a headset's is understood best.")
+                    }
                 }
 
                 Label { text: qsTr("Wake word") }

@@ -16,6 +16,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::voice::Input;
+
 /// Apps by name, each list sorted and without repeats.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InUse {
@@ -50,9 +52,12 @@ impl InUse {
 }
 
 /// Calls `on_change` with the PipeWire streams that capture the microphone, a camera or
-/// the screen, whenever that changes. Runs until `pw-dump` exits, so call it on its own
-/// thread.
-pub fn watch_pipewire(on_change: impl Fn(InUse)) -> anyhow::Result<()> {
+/// the screen, and `on_inputs` with the microphones there are, whenever that changes. Runs
+/// until `pw-dump` exits, so call it on its own thread.
+pub fn watch_pipewire(
+    on_change: impl Fn(InUse),
+    on_inputs: impl Fn(Vec<Input>),
+) -> anyhow::Result<()> {
     let mut child = Command::new("pw-dump")
         .args(["--monitor", "--no-colors"])
         .stdout(Stdio::piped())
@@ -62,6 +67,7 @@ pub fn watch_pipewire(on_change: impl Fn(InUse)) -> anyhow::Result<()> {
 
     let mut graph = Graph::default();
     let mut shown = InUse::default();
+    let mut inputs = None;
     for batch in serde_json::Deserializer::from_reader(stdout).into_iter::<Vec<Value>>() {
         for object in batch? {
             graph.apply(object);
@@ -70,6 +76,11 @@ pub fn watch_pipewire(on_change: impl Fn(InUse)) -> anyhow::Result<()> {
         if now != shown {
             on_change(now.clone());
             shown = now;
+        }
+        let now = graph.inputs();
+        if inputs.as_ref() != Some(&now) {
+            on_inputs(now.clone());
+            inputs = Some(now);
         }
     }
     _ = child.wait();
@@ -131,6 +142,38 @@ impl Graph {
                 && info.get("input-node-id")?.as_u64()? == id)
                 .then(|| info.get("output-node-id")?.as_u64())?
         })
+    }
+
+    /// The microphones, by description.
+    fn inputs(&self) -> Vec<Input> {
+        let mut inputs: Vec<Input> = self
+            .objects
+            .values()
+            .filter(|object| {
+                object.get("type").and_then(Value::as_str) == Some("PipeWire:Interface:Node")
+            })
+            .filter_map(|object| object.get("info")?.get("props")?.as_object())
+            .filter(|props| {
+                props.get("media.class").and_then(Value::as_str) == Some("Audio/Source")
+            })
+            .filter_map(|props| {
+                let text = |key: &str| props.get(key).and_then(Value::as_str);
+                let name = text("node.name")?.to_owned();
+                Some(Input {
+                    description: text("node.description")
+                        .or(text("node.nick"))
+                        .unwrap_or(&name)
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    external: matches!(text("device.bus"), Some("usb" | "bluetooth")),
+                    filter: props.get("node.virtual").and_then(Value::as_bool) == Some(true),
+                    name,
+                })
+            })
+            .collect();
+        inputs.sort_by(|a, b| a.description.cmp(&b.description));
+        inputs
     }
 
     fn in_use(&self) -> InUse {
@@ -463,6 +506,59 @@ mod tests {
         let in_use = graph.in_use();
         assert_eq!(in_use.camera, ["Firefox"]);
         assert_eq!(in_use.screen, ["OBS"]);
+    }
+
+    #[test]
+    fn lists_microphones() {
+        let graph = graph(vec![
+            node(
+                37,
+                "Audio/Source",
+                "suspended",
+                json!({ "node.name": "echo-cancel-source",
+                "node.description": "Echo-cancelled", "node.virtual": true }),
+            ),
+            node(
+                66,
+                "Audio/Source",
+                "running",
+                json!({ "node.name": "alsa_input.usb-Fuxi",
+                "node.description": "Fuxi-H3  Mono", "device.bus": "usb" }),
+            ),
+            node(
+                70,
+                "Audio/Source",
+                "suspended",
+                json!({ "node.name": "alsa_input.pci",
+                "node.description": "Ryzen HD Audio Controller", "device.bus": "pci" }),
+            ),
+            node(
+                80,
+                "Audio/Sink",
+                "running",
+                json!({ "node.name": "speakers" }),
+            ),
+            node(
+                81,
+                "Stream/Input/Audio",
+                "running",
+                json!({ "node.name": "pw-record" }),
+            ),
+        ]);
+        let inputs = graph.inputs();
+        let names: Vec<_> = inputs.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "echo-cancel-source",
+                "alsa_input.usb-Fuxi",
+                "alsa_input.pci"
+            ]
+        );
+        assert_eq!(inputs[1].description, "Fuxi-H3 Mono");
+        assert!(inputs[1].external && !inputs[1].filter);
+        assert!(!inputs[2].external);
+        assert!(inputs[0].filter);
     }
 
     #[test]

@@ -108,6 +108,8 @@ QtObject {
     // Apps using the microphone, the camera or recording the screen, by name
     property var privacy: ({ microphone: [], camera: [], screen: [] })
     readonly property bool privacyInUse: privacy.microphone.length + privacy.camera.length + privacy.screen.length > 0
+    // The microphones there are: [{ name, description, external, filter }]
+    property var microphones: []
     // Asking Claude by voice: { state: "listening" | "transcribing", level } or null
     property var voice: null
     readonly property bool listening: voice !== null && voice.state === "listening"
@@ -253,6 +255,8 @@ QtObject {
             handleProgress(ev)
         } else if (ev.type === "privacy") {
             privacy = { microphone: ev.microphone, camera: ev.camera, screen: ev.screen }
+        } else if (ev.type === "microphones") {
+            microphones = ev.inputs
         } else if (ev.type === "voice") {
             handleVoice(ev)
         } else if (ev.type === "speech") {

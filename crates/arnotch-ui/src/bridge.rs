@@ -8,7 +8,7 @@ use std::sync::{Mutex, OnceLock};
 
 use arnotch_core::event::VoiceState;
 use arnotch_core::event::{ChatState, UploadState};
-use arnotch_core::i18n::{self, tr};
+use arnotch_core::i18n::{self, tr, trf};
 use arnotch_core::terminals::{self, Terminal};
 use arnotch_core::{
     Decision, Event, chat, clipboard, control, focus, ipc, media, route, share, speech, voice,
@@ -190,6 +190,12 @@ pub mod qobject {
         #[cxx_name = "setWakeWord"]
         fn set_wake_word(self: &NotchBridge, word: &QString);
 
+        /// The microphone to listen to: "" picks a headset's if one is plugged in, "default"
+        /// the system's, otherwise PipeWire's name for one.
+        #[qinvokable]
+        #[cxx_name = "setMicrophone"]
+        fn set_microphone(self: &NotchBridge, name: &QString);
+
         /// Opens the file manager on the folder of a file, with the file selected.
         #[qinvokable]
         #[cxx_name = "showInFolder"]
@@ -321,6 +327,42 @@ pub fn publish_cameras(apps: Vec<String>) {
     publish_privacy(both);
 }
 
+/// The microphones there are, replayed to bridges created after it was published.
+static INPUTS_EVENT: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_inputs(inputs: Vec<voice::Input>) {
+    voice::set_inputs(inputs.clone());
+    let event = Event::Microphones { inputs };
+    *INPUTS_EVENT.lock().unwrap() = Some(event.clone());
+    _ = event_bus().send(event);
+}
+
+/// The microphone being recorded, for people.
+fn input_description() -> String {
+    voice::chosen_input()
+        .map(|input| input.description)
+        .unwrap_or_else(|| tr("the system's default microphone").to_owned())
+}
+
+/// Says the microphone distorts speech, at most every ten minutes: it stays so until the
+/// user turns it down.
+fn warn_clipped() {
+    static WARNED: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+    let mut warned = WARNED.lock().unwrap();
+    if warned.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(600)) {
+        return;
+    }
+    *warned = Some(std::time::Instant::now());
+    tracing::info!("the microphone clips");
+    _ = event_bus().send(Event::Notify {
+        title: tr("The microphone is too loud").to_owned(),
+        body: trf(
+            "{} distorts your voice, so words are misheard: turn it down in the sound settings",
+            &[&input_description()],
+        ),
+    });
+}
+
 fn publish_privacy(in_use: arnotch_core::privacy::InUse) {
     let event = Event::Privacy(in_use);
     let mut last = PRIVACY_EVENT.lock().unwrap();
@@ -383,6 +425,7 @@ fn listen_for_wake_word(word: String, on: std::sync::Arc<AtomicBool>) {
             || on.load(Ordering::Relaxed),
             paused,
             |question| _ = event_bus().send(Event::Wake { question }),
+            warn_clipped,
         );
         let Err(err) = result else { break };
         // The microphone went away (a headset unplugged...): try again a little later.
@@ -917,10 +960,26 @@ impl qobject::NotchBridge {
             LISTENING.lock().unwrap().take();
             // A cancelled round says nothing more: cancelling said it.
             let samples = match recorded {
-                Ok(Some(samples)) => samples,
-                Ok(None) => return send(VoiceState::Cancelled, 0.0, String::new()),
+                Ok(voice::Recorded::Speech(samples)) => samples,
+                Ok(voice::Recorded::Cancelled) => {
+                    return send(VoiceState::Cancelled, 0.0, String::new());
+                }
+                // Maybe the wrong microphone, or one turned down: say which one listened.
+                Ok(voice::Recorded::Nothing) => {
+                    send(VoiceState::Cancelled, 0.0, String::new());
+                    if LISTEN_ROUND.load(Ordering::Relaxed) == round {
+                        _ = event_bus().send(Event::Notify {
+                            title: tr("Heard nothing").to_owned(),
+                            body: trf("Listening to {}", &[&input_description()]),
+                        });
+                    }
+                    return;
+                }
                 Err(err) => return send(VoiceState::Failed, 0.0, format!("{err:#}")),
             };
+            if voice::clipped(&samples) {
+                warn_clipped();
+            }
             send(VoiceState::Transcribing, 0.0, String::new());
             match voice::transcribe(&samples) {
                 Ok(text) if text.is_empty() => send(VoiceState::Cancelled, 0.0, String::new()),
@@ -954,6 +1013,10 @@ impl qobject::NotchBridge {
                 text: String::new(),
             });
         }
+    }
+
+    pub fn set_microphone(&self, name: &QString) {
+        voice::choose_input(&name.to_string());
     }
 
     pub fn set_wake_word(&self, word: &QString) {
@@ -1038,6 +1101,7 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
             JOBS.lock().unwrap().clone(),
             PHONE.lock().unwrap().clone(),
             PRIVACY_EVENT.lock().unwrap().clone(),
+            INPUTS_EVENT.lock().unwrap().clone(),
         ];
         for event in replay.into_iter().flatten() {
             _ = qt_thread.queue(move |bridge| emit(bridge, &event));

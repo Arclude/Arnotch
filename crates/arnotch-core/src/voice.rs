@@ -8,9 +8,12 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
 
@@ -48,13 +51,22 @@ pub enum Control {
     Cancel,
 }
 
-/// Records the default microphone until `control` says so or the speaker falls silent,
-/// calling `on_level` with the loudness (0.0 to 1.0) 20 times a second. Returns the
-/// samples, or `None` when cancelled or nothing was said.
+/// How listening for a question ended.
+pub enum Recorded {
+    /// What was said.
+    Speech(Vec<i16>),
+    /// Not a word before giving up: maybe the microphone doesn't hear the user.
+    Nothing,
+    /// The user cancelled, or stopped before saying anything.
+    Cancelled,
+}
+
+/// Records the chosen microphone until `control` says so or the speaker falls silent,
+/// calling `on_level` with the loudness (0.0 to 1.0) 20 times a second.
 pub fn record(
     control: &Receiver<Control>,
     mut on_level: impl FnMut(f32),
-) -> anyhow::Result<Option<Vec<i16>>> {
+) -> anyhow::Result<Recorded> {
     let mut microphone = Microphone::open("Voice")?;
 
     let started = Instant::now();
@@ -70,40 +82,102 @@ pub fn record(
         on_level(level(loudness));
 
         match control.try_recv() {
-            Ok(Control::Stop) => break Ok(detector.heard()),
-            Ok(Control::Cancel) | Err(TryRecvError::Disconnected) => break Ok(false),
+            Ok(Control::Stop) if detector.heard() => break Ok(Heard::Finished),
+            Ok(_) | Err(TryRecvError::Disconnected) => return Ok(Recorded::Cancelled),
             Err(TryRecvError::Empty) => {}
         }
         match detector.feed(loudness, started.elapsed()) {
+            Heard::Listening if started.elapsed() > LONGEST => break Ok(Heard::Finished),
             Heard::Listening => {}
-            Heard::Finished => break Ok(true),
-            Heard::Nothing => break Ok(false),
-        }
-        if started.elapsed() > LONGEST {
-            break Ok(true);
+            heard => break Ok(heard),
         }
     };
     drop(microphone);
-    if !outcome? {
-        return Ok(None);
+    if let Heard::Nothing = outcome? {
+        return Ok(Recorded::Nothing);
     }
     // The pause that ended the question is only more to transcribe.
     let spoken = (detector.last_voice.as_secs_f32() + 0.4) * RATE as f32;
     samples.truncate((spoken as usize).max(RATE / 2));
-    Ok(Some(samples))
+    Ok(Recorded::Speech(samples))
 }
 
-/// The default microphone, recorded with `pw-record` in 50 ms chunks until dropped.
+/// A microphone PipeWire offers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Input {
+    /// PipeWire's name for it (`node.name`), what `pw-record --target` takes
+    pub name: String,
+    /// For people: "Fuxi-H3 Mono"
+    pub description: String,
+    /// Plugged in by USB or Bluetooth: a headset's, most likely closer to the mouth
+    pub external: bool,
+    /// A filter over another one (echo cancelling, noise suppression)
+    pub filter: bool,
+}
+
+/// Which microphone to record: [`AUTOMATIC`], [`SYSTEM_DEFAULT`] or an [`Input::name`].
+pub const AUTOMATIC: &str = "";
+pub const SYSTEM_DEFAULT: &str = "default";
+
+static INPUTS: Mutex<Vec<Input>> = Mutex::new(Vec::new());
+static CHOICE: Mutex<String> = Mutex::new(String::new());
+
+/// The microphones there are now, as PipeWire reports them.
+pub fn set_inputs(inputs: Vec<Input>) {
+    *INPUTS.lock().unwrap() = inputs;
+}
+
+/// The microphone the user chose: [`AUTOMATIC`], [`SYSTEM_DEFAULT`] or an [`Input::name`].
+pub fn choose_input(choice: &str) {
+    *CHOICE.lock().unwrap() = choice.to_owned();
+}
+
+/// The microphone to record, `None` for the system's default.
+pub fn chosen_input() -> Option<Input> {
+    pick(&CHOICE.lock().unwrap(), &INPUTS.lock().unwrap()).cloned()
+}
+
+/// The chosen microphone while it is there; otherwise, and for [`AUTOMATIC`], a headset's
+/// if one is plugged in (the system's default is often the laptop's own, which hears the
+/// room and the speakers as well as the user).
+fn pick<'a>(choice: &str, inputs: &'a [Input]) -> Option<&'a Input> {
+    if choice == SYSTEM_DEFAULT {
+        return None;
+    }
+    inputs
+        .iter()
+        .find(|input| input.name == choice)
+        .or_else(|| inputs.iter().find(|input| input.external && !input.filter))
+}
+
+/// Whether the sound is clipped: more than one sample in 500 at full scale. The
+/// microphone is turned up too far, and the distortion makes whisper mishear.
+pub fn clipped(samples: &[i16]) -> bool {
+    let full = samples
+        .iter()
+        .filter(|&&s| s.unsigned_abs() >= 32_000)
+        .count();
+    !samples.is_empty() && full * 500 > samples.len()
+}
+
+/// The chosen microphone, recorded with `pw-record` in 50 ms chunks until dropped.
 pub(crate) struct Microphone {
     child: std::process::Child,
     stdout: std::process::ChildStdout,
     chunk: Vec<u8>,
+    /// What it records, `None` for the system's default
+    input: Option<String>,
 }
 
 impl Microphone {
     /// `name` tells the desktop's microphone indicator what arnotch listens for.
     pub(crate) fn open(name: &str) -> anyhow::Result<Self> {
-        let mut child = Command::new("pw-record")
+        let input = chosen_input().map(|input| input.name);
+        let mut record = Command::new("pw-record");
+        if let Some(input) = &input {
+            record.arg(format!("--target={input}"));
+        }
+        let mut child = record
             .args(["--raw", "--format", "s16", "--channels", "1"])
             .arg(format!("--rate={RATE}"))
             .args([
@@ -120,7 +194,13 @@ impl Microphone {
             child,
             stdout,
             chunk: vec![0u8; CHUNK * 2],
+            input,
         })
+    }
+
+    /// Another microphone is chosen now, or plugged in.
+    pub(crate) fn outdated(&self) -> bool {
+        chosen_input().map(|input| input.name) != self.input
     }
 
     /// The next 50 ms of sound; waits for it.
@@ -276,6 +356,7 @@ pub fn transcribe_with(model: &Path, samples: &[i16]) -> anyhow::Result<String> 
     let wav = std::env::temp_dir().join(format!("arnotch-voice-{}-{n}.wav", std::process::id()));
     std::fs::write(&wav, wav_bytes(samples))?;
     let output = whisper(model, &wav, samples.len());
+    keep(&wav, model);
     _ = std::fs::remove_file(&wav);
     let output = output?;
     let gpu = on_gpu(&String::from_utf8_lossy(&output.stderr));
@@ -338,6 +419,61 @@ fn language() -> String {
         .ok()
         .filter(|l| !l.is_empty())
         .unwrap_or_else(|| crate::i18n::language().to_owned())
+}
+
+/// For finding out why something was misheard: with `ARNOTCH_KEEP_RECORDINGS` naming a
+/// folder, each question is kept there as `<time>-<model>.wav` (not what the wake word
+/// listener hears, which is everything said in the room), until the day is over.
+fn keep(wav: &Path, model: &Path) {
+    let Some(dir) = std::env::var_os("ARNOTCH_KEEP_RECORDINGS").map(PathBuf::from) else {
+        return;
+    };
+    if find_wake_model().as_deref() == Some(model) {
+        return;
+    }
+    let time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    let model = model
+        .file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().replace("ggml-", ""));
+    _ = std::fs::create_dir_all(&dir);
+    if let Err(err) = std::fs::copy(wav, dir.join(format!("{time}-{model}.wav"))) {
+        tracing::warn!("cannot keep the recording in {}: {err}", dir.display());
+    }
+    // Yesterday's go, so they don't pile up.
+    let today = today_began();
+    for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let old = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .is_ok_and(|modified| modified < today);
+        if old && path.extension().is_some_and(|ext| ext == "wav") {
+            _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Midnight today, local time.
+fn today_began() -> std::time::SystemTime {
+    let now = std::time::SystemTime::now();
+    let secs = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs()) as libc::time_t;
+    // SAFETY: plain C time functions on values owned here.
+    let midnight = unsafe {
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&secs, &mut tm).is_null() {
+            return now - Duration::from_secs(86_400);
+        }
+        tm.tm_hour = 0;
+        tm.tm_min = 0;
+        tm.tm_sec = 0;
+        tm.tm_isdst = -1;
+        libc::mktime(&mut tm)
+    };
+    std::time::UNIX_EPOCH + Duration::from_secs(midnight.max(0) as u64)
 }
 
 /// Whether whisper.cpp ran on the graphics card, as the last transcript's log said.
@@ -478,6 +614,46 @@ mod tests {
         assert_eq!(drop_repeats("Yarın saat dokuzda"), "Yarın saat dokuzda");
     }
 
+    fn input(name: &str, external: bool, filter: bool) -> Input {
+        Input {
+            name: name.to_owned(),
+            description: name.to_owned(),
+            external,
+            filter,
+        }
+    }
+
+    #[test]
+    fn picks_the_microphone() {
+        let laptop = input("laptop", false, false);
+        let headset = input("headset", true, false);
+        let echo = input("echo-cancel", false, true);
+        let all = [echo.clone(), laptop.clone(), headset.clone()];
+        // A headset first, over the laptop's own.
+        assert_eq!(pick(AUTOMATIC, &all), Some(&headset));
+        assert_eq!(pick(AUTOMATIC, &[laptop.clone(), echo.clone()]), None);
+        assert_eq!(pick(SYSTEM_DEFAULT, &all), None);
+        assert_eq!(pick("laptop", &all), Some(&laptop));
+        assert_eq!(pick("echo-cancel", &all), Some(&echo));
+        // The chosen one unplugged: as if automatic.
+        assert_eq!(pick("gone", &all), Some(&headset));
+        assert_eq!(pick("gone", &[laptop]), None);
+    }
+
+    #[test]
+    fn tells_clipped_sound() {
+        let speech: Vec<i16> = (0..16_000)
+            .map(|i| ((i % 200) as i16 - 100) * 150)
+            .collect();
+        assert!(!clipped(&speech));
+        let mut loud = speech.clone();
+        for s in loud.iter_mut().step_by(100) {
+            *s = i16::MAX;
+        }
+        assert!(clipped(&loud));
+        assert!(!clipped(&[]));
+    }
+
     #[test]
     fn measures_loudness() {
         assert_eq!(rms(&[]), 0.0);
@@ -548,6 +724,15 @@ mod tests {
              read_audio_data: reading audio data"
         ));
         assert!(!on_gpu(""));
+    }
+
+    #[test]
+    fn today_began_at_midnight() {
+        let midnight = today_began();
+        let since = std::time::SystemTime::now()
+            .duration_since(midnight)
+            .unwrap();
+        assert!(since < Duration::from_secs(86_400 + 3_600), "{since:?}");
     }
 
     #[test]

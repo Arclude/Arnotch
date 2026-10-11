@@ -58,7 +58,10 @@ fn main() -> anyhow::Result<()> {
     std::thread::Builder::new()
         .name("notch-pipewire".into())
         .spawn(|| {
-            if let Err(err) = arnotch_core::privacy::watch_pipewire(bridge::publish_pipewire) {
+            if let Err(err) = arnotch_core::privacy::watch_pipewire(
+                bridge::publish_pipewire,
+                bridge::publish_inputs,
+            ) {
                 tracing::info!("no microphone indicator (pw-dump): {err:#}");
             }
         })?;

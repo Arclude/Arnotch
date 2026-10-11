@@ -94,6 +94,13 @@ fn turkish(text: &str) -> Option<&'static str> {
             "Konuşma modeli yok: arnotchctl voice-model base komutunu çalıştır"
         }
         "Can't listen for the wake word" => "Uyandırma sözü dinlenemiyor",
+        "the system's default microphone" => "sistemin varsayılan mikrofonu",
+        "The microphone is too loud" => "Mikrofon sesi çok yüksek",
+        "{} distorts your voice, so words are misheard: turn it down in the sound settings" => {
+            "{} sesini bozuyor, kelimeler yanlış anlaşılıyor: ses ayarlarından kıs"
+        }
+        "Heard nothing" => "Bir şey duymadım",
+        "Listening to {}" => "Dinlenen mikrofon: {}",
         "whisper.cpp is not installed (whisper-cli)" => {
             "whisper.cpp kurulu değil (whisper-cli): sudo pacman -S whisper-cpp"
         }

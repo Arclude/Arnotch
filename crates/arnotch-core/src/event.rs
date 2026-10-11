@@ -162,6 +162,10 @@ pub enum Event {
     /// the notch itself.
     #[serde(skip_deserializing)]
     Privacy(crate::privacy::InUse),
+    /// The microphones there are, for choosing one in the settings; published by the
+    /// notch itself.
+    #[serde(skip_deserializing)]
+    Microphones { inputs: Vec<crate::voice::Input> },
     /// Listening for a question to Claude; published by the notch itself.
     #[serde(skip_deserializing)]
     Voice {

@@ -27,18 +27,28 @@ const FILLERS: &[&str] = &[
 ];
 
 /// Listens for `word` until `keep_on` says to stop, calling `on_wake` with the question
-/// said along with it (empty when there was none). The microphone is ignored while
-/// `paused` (arnotch listens for a question or talks itself).
+/// said along with it (empty when there was none), and `on_clipped` when the microphone is
+/// turned up so far that speech is distorted. The microphone is ignored while `paused`
+/// (arnotch listens for a question or talks itself).
 pub fn listen(
     word: &str,
     model: &Path,
     keep_on: impl Fn() -> bool,
     paused: impl Fn() -> bool,
     mut on_wake: impl FnMut(String),
+    mut on_clipped: impl FnMut(),
 ) -> anyhow::Result<()> {
     let mut microphone = Microphone::open("Wake word")?;
     let mut bursts = Bursts::default();
+    let mut chunks: u32 = 0;
     while keep_on() {
+        // Every second: another microphone chosen, or a headset plugged in.
+        chunks = chunks.wrapping_add(1);
+        if chunks.is_multiple_of(20) && microphone.outdated() {
+            tracing::info!("wake word: switching microphones");
+            microphone = Microphone::open("Wake word")?;
+            bursts = Bursts::default();
+        }
         let piece = microphone.next_chunk()?;
         if paused() {
             bursts = Bursts::default();
@@ -47,6 +57,9 @@ pub fn listen(
         let Some(burst) = bursts.feed(&piece) else {
             continue;
         };
+        if voice::clipped(&burst) {
+            on_clipped();
+        }
         let text = match voice::transcribe_with(model, &burst) {
             Ok(text) => text,
             Err(err) => {

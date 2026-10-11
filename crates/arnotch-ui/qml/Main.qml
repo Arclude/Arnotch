@@ -45,6 +45,10 @@ QtObject {
         // Wake arnotch by saying its name: the microphone stays on, listened to on this computer
         property bool wakeOn: false
         property string wakeWord: "Claude"
+        // The microphone to listen to: "" a headset's if one is plugged in, "default" the
+        // system's, or PipeWire's name for one
+        property string microphone: ""
+        onMicrophoneChanged: bridge.setMicrophone(microphone)
         onWakeOnChanged: app.updateWakeWord()
         onWakeWordChanged: app.updateWakeWord()
         // Let Claude in the chat open apps, play music, change the volume, ... (commands
@@ -163,6 +167,7 @@ QtObject {
             setCalendarUrl(app.settings.calendarUrl)
             setWeatherCity(app.settings.weatherCity)
             setDoNotDisturb(app.doNotDisturb)
+            setMicrophone(app.settings.microphone)
             app.updateWakeWord()
         }
         onEventReceived: json => {
@@ -316,7 +321,7 @@ QtObject {
     function openSettings() {
         // Created on demand so Qt Quick Controls is only loaded when the window is used.
         if (!settingsWindow)
-            settingsWindow = Qt.createComponent("SettingsWindow.qml").createObject(null, { settings: app.settings })
+            settingsWindow = Qt.createComponent("SettingsWindow.qml").createObject(null, { settings: app.settings, notch: app.state })
         settingsWindow.show()
         settingsWindow.raise()
         settingsWindow.requestActivate()
