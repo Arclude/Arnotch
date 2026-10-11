@@ -176,6 +176,12 @@ QtObject {
         // ListModel is not reactive inside functions, so bindings depend on `revision`.
         property int revision: 0
     }
+    // The chat is about mail: Claude reads Gmail and saves drafts, until a new chat
+    property bool chatGmail: false
+    // The Gmail inbox, newest first (see MailView), and what went wrong checking it
+    property var mails: []
+    property string mailError: ""
+    readonly property int unreadMails: mails.filter(m => m.unread).length
     // Files to send with the next chat message (absolute paths)
     property var chatAttachments: []
     // The message being answered; chat events of other turns are leftovers of stopped answers.
@@ -190,7 +196,9 @@ QtObject {
     property string time: Qt.formatTime(new Date(), "HH:mm")
 
     // Claude asked for permission; Main switches the islands to the activity tab.
-    signal permissionRequested(string requestId)
+    signal permissionRequested(string requestId, string sessionId)
+    // It was answered, here or elsewhere, or timed out.
+    signal permissionClosed(string requestId)
     // Claude finished answering in the chat ("done" or "failed"), with the answer or error.
     signal chatFinished(string status, string body)
     // A question was asked by voice: Main sends it to Claude.
@@ -276,6 +284,8 @@ QtObject {
             remindMeetings()
         } else if (ev.type === "clipboard") {
             clipboard = ev.items
+        } else if (ev.type === "mail") {
+            handleMail(ev)
         } else if (ev.type === "media") {
             const wasPlaying = media !== null && media.playing
             media = ev.player ?? null
@@ -420,8 +430,30 @@ QtObject {
             say(qsTr("Couldn't share %1").arg(ev.file), ev.error, 8000)
     }
 
-    // Shows the user's message and an empty answer that `chat` events fill in.
-    function startChatTurn(turn, prompt, files) {
+    // New mail opens the island, unless focusing holds it back.
+    function handleMail(ev) {
+        mails = ev.mails
+        mailError = ev.error ?? ""
+        const arrived = ev.arrived ?? []
+        if (arrived.length === 0)
+            return
+        const bounced = arrived.filter(m => m.bounce)
+        let said
+        if (arrived.length === 1) {
+            const m = arrived[0]
+            said = say(m.bounce ? qsTr("Mail returned") : m.from, m.subject || m.snippet, 6000, true)
+        } else {
+            said = say(qsTr("%n new mail(s)", "", arrived.length),
+                       bounced.length ? qsTr("%n returned", "", bounced.length) : arrived.map(m => m.from).join(", "),
+                       6000, true)
+        }
+        if (said)
+            notifying = true
+    }
+
+    // Shows the user's message and an empty answer that `chat` events fill in; `mode` is
+    // the permission mode it is answered in.
+    function startChatTurn(turn, prompt, files, mode) {
         // A new message replaces an answer still being written.
         for (let i = 0; i < chat.count; i++) {
             if (chat.get(i).status === "streaming")
@@ -429,8 +461,8 @@ QtObject {
         }
         chatTurn = turn
         const names = (files ?? []).map(path => path.split("/").pop()).join("\n")
-        chat.append({ who: "user", body: prompt, status: "done", files: names, tool: "", model: "", changes: "[]" })
-        chat.append({ who: "claude", body: "", status: "streaming", files: "", tool: "", model: "", changes: "[]" })
+        chat.append({ who: "user", body: prompt, status: "done", files: names, tool: "", model: "", changes: "[]", mode: mode })
+        chat.append({ who: "claude", body: "", status: "streaming", files: "", tool: "", model: "", changes: "[]", mode: mode })
         chat.revision++
     }
 
@@ -439,6 +471,7 @@ QtObject {
     }
 
     function clearChat() {
+        chatGmail = false
         chat.clear()
         chatTurn = 0
         chat.revision++
@@ -491,11 +524,11 @@ QtObject {
     }
 
     function startFocusPhase(phase, round, workMinutes) {
-        const long = phase === "break" && round % 4 === 0
-        const minutes = phase === "work" ? workMinutes : long ? longBreakMinutes : breakMinutes
+        const longBreak = phase === "break" && round % 4 === 0
+        const minutes = phase === "work" ? workMinutes : longBreak ? longBreakMinutes : breakMinutes
         timerNow = Date.now()
         timer = {
-            label: phase === "work" ? qsTr("Focus · round %1").arg(round) : long ? qsTr("Long break") : qsTr("Break"),
+            label: phase === "work" ? qsTr("Focus · round %1").arg(round) : longBreak ? qsTr("Long break") : qsTr("Break"),
             endsAt: timerNow + minutes * 60000,
             total: minutes * 60000,
             focus: phase,
@@ -645,6 +678,22 @@ QtObject {
                 notifying = true
             }
         }
+    }
+
+    // The answer to a permission request said aloud: "allow" for "evet", "olur, çalıştır",
+    // "deny" for "hayır", "yok, dur"; "" when it is neither.
+    function permissionAnswer(text) {
+        const said = text.toLocaleLowerCase(Qt.locale("tr_TR")).replace(/[^\p{L}\s']/gu, " ").trim().replace(/\s+/g, " ")
+        const starts = words => words.some(w => said === w || said.startsWith(w + " "))
+        // "Hayır" first: "hayır, çalıştırma" is no, whatever follows.
+        if (starts(["hayır", "yok", "olmaz", "istemiyorum", "reddet", "iptal", "dur", "vazgeç", "çalıştırma",
+                    "yapma", "no", "nope", "deny", "cancel", "don't", "dont", "stop"]))
+            return "deny"
+        if (starts(["evet", "olur", "tamam", "onayla", "onaylıyorum", "izin ver", "çalıştır", "yap", "devam",
+                    "peki", "tabii", "tabi", "he", "aynen", "yes", "yeah", "yep", "ok", "okay", "sure",
+                    "go ahead", "allow", "run it", "do it"]))
+            return "allow"
+        return ""
     }
 
     // "That's all", "teşekkürler", ...: words that end a conversation instead of asking.
@@ -801,6 +850,7 @@ QtObject {
 
     // The request was answered (here or by timing out); drop its buttons.
     function closePermission(requestId) {
+        permissionClosed(requestId)
         for (const id in details) {
             const d = details[id]
             if (d.permission && d.permission.request_id === requestId) {

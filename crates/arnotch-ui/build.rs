@@ -32,6 +32,7 @@ fn main() {
         "qml/TimerRow.qml",
         "qml/Spring.qml",
         "qml/PhoneView.qml",
+        "qml/MailView.qml",
         "qml/ProgressRing.qml",
         "qml/ProgressRow.qml",
         "qml/ChangeCard.qml",

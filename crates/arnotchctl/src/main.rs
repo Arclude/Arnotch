@@ -1,7 +1,7 @@
 //! Command line client for the notch.
 //!
 //!   arnotchctl notify <title> [body]   show a message
-//!   arnotchctl open [tab]              open the island (tabs: activity, chat, terminals, shelf)
+//!   arnotchctl open [tab]              open the island (tabs: activity, chat, terminals, shelf, phone, mail)
 //!   arnotchctl toggle [tab]            open the island on a tab, or close it if it shows that tab
 //!   arnotchctl close                   close the island
 //!   arnotchctl timer <time> [label]    start a timer: 25m, 1h30m, 90s, 10 (minutes)

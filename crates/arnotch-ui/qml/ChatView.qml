@@ -18,6 +18,9 @@ Column {
     property bool speaking: false
     // The latest loudness levels, oldest first, for the bars
     property var levels: []
+    // What Claude may do without asking: "ask", "auto", "acceptEdits" or "plan"
+    property string mode: "auto"
+    readonly property var modes: ["auto", "acceptEdits", "plan", "ask"]
     onVoiceChanged: {
         if (!voice)
             levels = []
@@ -36,6 +39,21 @@ Column {
     signal listen()
     signal listened()
     signal unheard()
+    // The next mode was chosen (the mode button, or Shift+Tab in the field)
+    signal modeChosen(string mode)
+    // "Carry out the plan" under an answer given in plan mode
+    signal planApproved()
+
+    function nextMode() {
+        view.modeChosen(modes[(modes.indexOf(mode) + 1) % modes.length])
+    }
+
+    function modeText(name) {
+        return name === "ask" ? qsTr("Ask first")
+             : name === "acceptEdits" ? qsTr("Accept edits")
+             : name === "plan" ? qsTr("Plan")
+             : qsTr("Auto")
+    }
 
     function toolText(name) {
         return name === "WebSearch" || name === "web_search" ? qsTr("Searching the web…")
@@ -45,6 +63,8 @@ Column {
              : name === "Edit" ? qsTr("Changing a file…")
              : name === "Write" ? qsTr("Writing a file…")
              : name.startsWith("mcp__obsidian") ? qsTr("Writing a note in Obsidian…")
+             : name.endsWith("Gmail__create_draft") || name.endsWith("Gmail__update_draft") ? qsTr("Saving a draft in Gmail…")
+             : name.includes("Gmail__") ? qsTr("Reading Gmail…")
              : qsTr("Looking through files…")
     }
 
@@ -135,12 +155,28 @@ Column {
                     required property string tool
                     required property string model
                     required property string changes
+                    required property string mode
+                    required property int index
                     readonly property bool mine: who === "user"
                     readonly property var changed: JSON.parse(changes || "[]")
 
                     width: column.width
                     height: bubble.height + (changeList.visible ? changeList.height + 6 : 0)
                             + (extra.visible ? extra.height + 4 : 0)
+                            + (approve.visible ? approve.height + 6 : 0)
+
+                    // The plan in the newest answer, while the chat is still in plan mode
+                    PillButton {
+                        id: approve
+                        anchors.top: extra.visible ? extra.bottom : changeList.visible ? changeList.bottom : bubble.bottom
+                        anchors.topMargin: 6
+                        visible: !message.mine && message.mode === "plan" && message.status === "done"
+                                 && view.mode === "plan" && message.index === view.messages.count - 1
+                        text: qsTr("Carry out the plan")
+                        tint: "#34c759"
+                        filled: true
+                        onClicked: view.planApproved()
+                    }
 
                     // The files Claude changed while answering, under its answer
                     Column {
@@ -396,6 +432,7 @@ Column {
             placeholder: view.messages.count ? qsTr("Reply to Claude…") : qsTr("Ask Claude…")
             onSubmitted: text => view.asked(text)
             onCancelled: view.cancelled()
+            onBacktabbed: view.nextMode()
         }
 
         Row {
@@ -403,6 +440,14 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
 
+            // What Claude may do without asking; a click (or Shift+Tab) moves to the next
+            PillButton {
+                anchors.verticalCenter: parent.verticalCenter
+                text: view.modeText(view.mode)
+                tint: view.mode === "plan" ? "#5ac8c8" : view.mode === "acceptEdits" ? "#c792ea"
+                    : view.mode === "ask" ? "#8b909a" : "#8fb4ff"
+                onClicked: view.nextMode()
+            }
             IconButton {
                 visible: view.speaking
                 glyph: "🔇"

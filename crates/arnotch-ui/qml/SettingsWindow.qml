@@ -8,6 +8,8 @@ ApplicationWindow {
     required property var settings
     // NotchState: what the settings offer to choose from (the microphones)
     required property var notch
+    // For the mail's app password, which goes to the Secret Service, not the settings
+    required property var bridge
     readonly property bool sharingOn: settings.shareService !== "off"
 
     title: qsTr("arnotch Settings")
@@ -15,6 +17,50 @@ ApplicationWindow {
     height: 640
     minimumWidth: 420
     minimumHeight: 300
+
+    // Saves everything: text fields save when Enter is pressed or another field is
+    // clicked, so the one being typed in is saved here too; then the settings file is
+    // written at once. Closing the window saves as well.
+    function save() {
+        const item = win.activeFocusItem
+        if (item && item.editingFinished)
+            item.editingFinished()
+        if (appPassword.text !== "")
+            mailSettings.savePassword()
+        win.settings.sync()
+        savedNote.opacity = 1
+        savedTimer.restart()
+    }
+
+    onClosing: save()
+
+    footer: ToolBar {
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+
+            Label {
+                id: savedNote
+                opacity: 0
+                text: qsTr("Saved")
+                color: "#34c759"
+                Behavior on opacity { NumberAnimation { duration: 300 } }
+
+                Timer {
+                    id: savedTimer
+                    interval: 2000
+                    onTriggered: savedNote.opacity = 0
+                }
+            }
+            Item { Layout.fillWidth: true }
+            Button {
+                text: qsTr("Save")
+                highlighted: true
+                onClicked: win.save()
+            }
+        }
+    }
 
     function screenOptions() {
         const options = [
@@ -172,6 +218,54 @@ ApplicationWindow {
                     onEditingFinished: win.settings.weatherCity = text.trim()
                 }
 
+                Label { text: qsTr("Mail") }
+                ColumnLayout {
+                    id: mailSettings
+                    Layout.fillWidth: true
+
+                    // Whether a password is saved for the address, or what went wrong saving it
+                    property bool saved: win.settings.mailAddress !== "" && win.bridge.hasMailPassword(win.settings.mailAddress)
+                    property string problem: ""
+
+                    function savePassword() {
+                        problem = win.bridge.setMailPassword(win.settings.mailAddress, appPassword.text)
+                        appPassword.text = ""
+                        saved = problem === ""
+                    }
+
+                    TextField {
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Gmail address, e.g. you@example.com")
+                        text: win.settings.mailAddress
+                        onEditingFinished: win.settings.mailAddress = text.trim()
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        TextField {
+                            id: appPassword
+                            Layout.fillWidth: true
+                            enabled: win.settings.mailAddress !== ""
+                            echoMode: TextInput.Password
+                            placeholderText: mailSettings.saved ? qsTr("App password saved") : qsTr("Google app password")
+                        }
+                        Button {
+                            text: qsTr("Save")
+                            enabled: appPassword.text !== ""
+                            onClicked: mailSettings.savePassword()
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        textFormat: Text.StyledText
+                        onLinkActivated: link => Qt.openUrlExternally(link)
+                        text: mailSettings.problem !== "" ? mailSettings.problem
+                            : qsTr("The inbox is checked every 2 minutes over IMAP and new mail opens the island. Make an app password at <a href=\"https://myaccount.google.com/apppasswords\">myaccount.google.com/apppasswords</a> (needs 2-Step Verification); it is kept in KWallet. Summaries and drafts go through Claude's Gmail connector in claude.ai; nothing is ever sent.")
+                    }
+                }
+
                 Label { text: qsTr("Focus") }
                 ColumnLayout {
                     RowLayout {
@@ -232,7 +326,7 @@ ApplicationWindow {
                         opacity: 0.7
                         font.pixelSize: 11
                         visible: win.settings.computerControl
-                        text: qsTr("Opening apps, music, volume and brightness happen right away; other commands wait for your Allow in the island.")
+                        text: qsTr("Opening apps, music, volume and brightness happen right away; other commands as the permission mode says.")
                     }
                     Switch {
                         text: qsTr("Claude can change files")
@@ -246,7 +340,43 @@ ApplicationWindow {
                         opacity: 0.7
                         font.pixelSize: 11
                         visible: win.settings.chatEdit
-                        text: qsTr("Each change waits for your Allow in the island; the chat shows what changed.")
+                        text: qsTr("Each change waits for your Allow in the island, unless the mode accepts edits; the chat shows what changed.")
+                    }
+                }
+
+                Label { text: qsTr("Permissions") }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    ComboBox {
+                        Layout.fillWidth: true
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("Auto"), value: "auto" },
+                            { text: qsTr("Accept edits"), value: "acceptEdits" },
+                            { text: qsTr("Plan"), value: "plan" },
+                            { text: qsTr("Ask first"), value: "ask" }
+                        ]
+                        // Follows the mode button in the chat, too.
+                        currentIndex: indexOfValue(win.settings.chatMode)
+                        onActivated: win.settings.chatMode = currentValue
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        text: win.settings.chatMode === "acceptEdits" ? qsTr("Files are changed without asking; commands are asked about in the island.")
+                            : win.settings.chatMode === "plan" ? qsTr("Claude only looks into things and answers with a plan; \"Carry out the plan\" under it lets it go ahead.")
+                            : win.settings.chatMode === "ask" ? qsTr("Every command and change is asked about in the island.")
+                            : qsTr("Claude Code's classifier lets safe commands through and asks about risky ones; file changes are still asked about.")
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: 0.7
+                        font.pixelSize: 11
+                        text: qsTr("The button next to the chat's field, or Shift+Tab in it, switches too.")
                     }
                 }
 

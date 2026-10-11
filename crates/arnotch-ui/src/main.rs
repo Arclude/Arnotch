@@ -47,6 +47,12 @@ fn main() -> anyhow::Result<()> {
         .name("notch-weather".into())
         .spawn(move || watch_weather(cities))?;
 
+    let (mail_address, addresses) = std::sync::mpsc::channel();
+    _ = bridge::MAIL_ADDRESS.set(mail_address);
+    std::thread::Builder::new()
+        .name("notch-mail".into())
+        .spawn(move || watch_mail(addresses))?;
+
     std::thread::Builder::new()
         .name("notch-jobs".into())
         .spawn(|| {
@@ -269,6 +275,60 @@ fn watch_weather(cities: std::sync::mpsc::Receiver<String>) {
             }
             Ok(_) => {}
             Err(err) => tracing::warn!("weather: {err:#}"),
+        }
+    }
+}
+
+/// Checks the Gmail inbox every 2 minutes, and right away when the address is set again
+/// (a new address, or the app password saved).
+fn watch_mail(addresses: std::sync::mpsc::Receiver<String>) {
+    use arnotch_core::mail;
+    use std::sync::mpsc::RecvTimeoutError;
+
+    let mut address = String::new();
+    let mut inbox = mail::Inbox::default();
+    // Read from the wallet once, not every 2 minutes (a locked wallet asks to be unlocked).
+    let mut login = None;
+    loop {
+        let wait = if address.is_empty() {
+            Duration::MAX
+        } else {
+            Duration::from_secs(120)
+        };
+        match addresses.recv_timeout(wait) {
+            Ok(new) => {
+                let new = new.trim().to_owned();
+                if new != address {
+                    address = new;
+                    inbox = mail::Inbox::default();
+                }
+                login = None;
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
+        if address.is_empty() {
+            bridge::publish_mail(Vec::new(), Vec::new(), String::new());
+            continue;
+        }
+        if login.is_none() {
+            match mail::Login::load(&address) {
+                Ok(loaded) => login = Some(loaded),
+                Err(err) => {
+                    bridge::publish_mail(Vec::new(), Vec::new(), format!("{err:#}"));
+                    continue;
+                }
+            }
+        }
+        match inbox.check(login.as_ref().expect("loaded above")) {
+            Ok((mails, arrived)) => {
+                tracing::debug!("mail: {} shown, {} new", mails.len(), arrived.len());
+                bridge::publish_mail(mails, arrived, String::new());
+            }
+            Err(err) => {
+                tracing::warn!("mail: {err:#}");
+                bridge::publish_mail(inbox.mails(), Vec::new(), format!("{err:#}"));
+            }
         }
     }
 }

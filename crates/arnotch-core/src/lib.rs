@@ -13,6 +13,7 @@ pub mod focus;
 pub mod i18n;
 pub mod ipc;
 pub mod jobs;
+pub mod mail;
 pub mod media;
 pub mod phone;
 pub mod privacy;

@@ -150,6 +150,16 @@ pub enum Event {
     Calendar {
         meetings: Vec<crate::calendar::Meeting>,
     },
+    /// The Gmail inbox, newest first, with the messages that arrived since the last check
+    /// and what went wrong checking it; published by the notch itself.
+    #[serde(skip_deserializing)]
+    Mail {
+        mails: Vec<crate::mail::Mail>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        arrived: Vec<crate::mail::Mail>,
+        #[serde(skip_serializing_if = "String::is_empty")]
+        error: String,
+    },
     /// Downloads and file transfers in progress; published by the notch itself.
     #[serde(skip_deserializing)]
     Jobs { jobs: Vec<crate::jobs::Job> },

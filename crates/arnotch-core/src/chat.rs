@@ -27,6 +27,37 @@ commands.";
 
 const NO_CONTROL: &str = "You can't change anything on the user's computer.";
 
+/// What Claude may do with the user's Gmail.
+const GMAIL_PROMPT: &str = "You can read the user's Gmail with the Gmail tools and save \
+drafts with create_draft (pass replyToMessageId to answer a message). You can't send, reply \
+to, forward or delete mail, and must never try: the user sends drafts themselves.";
+
+/// claude.ai's Gmail connector: what it may do. Drafts are saved; nothing is ever sent.
+const GMAIL_TOOLS: &[&str] = &[
+    "mcp__claude_ai_Gmail__search_threads",
+    "mcp__claude_ai_Gmail__get_thread",
+    "mcp__claude_ai_Gmail__get_message",
+    "mcp__claude_ai_Gmail__list_drafts",
+    "mcp__claude_ai_Gmail__get_draft",
+    "mcp__claude_ai_Gmail__create_draft",
+    "mcp__claude_ai_Gmail__update_draft",
+];
+/// ...and what it must not, whatever the user's own settings allow.
+const GMAIL_FORBIDDEN: &[&str] = &[
+    "mcp__claude_ai_Gmail__send_message",
+    "mcp__claude_ai_Gmail__reply",
+    "mcp__claude_ai_Gmail__forward",
+    "mcp__claude_ai_Gmail__trash_message",
+    "mcp__claude_ai_Gmail__trash_thread",
+    "mcp__claude_ai_Gmail__delete_draft",
+    "mcp__claude_ai_Gmail__delete_label",
+];
+
+/// Plan mode in print mode has no ExitPlanMode tool: the plan is the answer.
+const PLAN_PROMPT: &str = "You are in plan mode: look into what is needed, change nothing, \
+and answer with a short, numbered plan. Don't ask for approval with a tool; the user \
+approves the plan with a button under your answer, and you carry it out then.";
+
 /// What Claude needs to know to change files for the user.
 const EDIT_PROMPT: &str = "You can change files on the user's computer with the Edit and \
 Write tools (read a file before editing it). Each change waits for the user's Allow in the \
@@ -100,6 +131,43 @@ const MAX_PDF: u64 = 20 * 1024 * 1024;
 /// Text files up to this size go with their contents.
 const MAX_TEXT: u64 = 200 * 1024;
 
+/// How Claude may act without asking, as Claude Code's permission modes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mode {
+    /// Everything that changes something is asked about in the island.
+    Ask,
+    /// A classifier lets safe commands through; risky ones and file changes are asked.
+    #[default]
+    Auto,
+    /// File changes are made without asking; commands are asked about.
+    AcceptEdits,
+    /// Claude only looks and answers with a plan.
+    Plan,
+}
+
+impl Mode {
+    /// The settings' name for it: "ask", "auto", "acceptEdits" or "plan"; anything else
+    /// is [`Mode::Auto`].
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "ask" => Self::Ask,
+            "acceptEdits" => Self::AcceptEdits,
+            "plan" => Self::Plan,
+            _ => Self::Auto,
+        }
+    }
+
+    /// The value of `--permission-mode`.
+    fn flag(self) -> &'static str {
+        match self {
+            Self::Ask => "default",
+            Self::Auto => "auto",
+            Self::AcceptEdits => "acceptEdits",
+            Self::Plan => "plan",
+        }
+    }
+}
+
 /// A message to Claude.
 #[derive(Debug, Default)]
 pub struct Request {
@@ -111,11 +179,16 @@ pub struct Request {
     /// Let Claude read files on this computer (Read, Glob, Grep), read-only.
     pub files: bool,
     /// Let Claude work the computer with commands: the harmless ones right away, others
-    /// once the user allows them in the island.
+    /// as [`Request::mode`] says.
     pub control: bool,
     /// Let Claude change files (Edit, Write), each change once the user allows it in the
     /// island. The changes made come back as [`Piece::Change`].
     pub edit: bool,
+    /// What Claude may do without asking.
+    pub mode: Mode,
+    /// Let Claude read the user's Gmail and save drafts (claude.ai's Gmail connector),
+    /// never send. Commands and file changes are off then.
+    pub gmail: bool,
     /// The model and the effort; none leaves the user's Claude Code default.
     pub route: Option<crate::route::Route>,
     /// The user's Obsidian vault, where research is written down.
@@ -136,6 +209,15 @@ pub struct Answer {
     child: Child,
 }
 
+/// Whether the message is about the user's mail, typed or said ("son maillerim ne?",
+/// "e-postama bak", "gelen kutusu"): the chat then reaches Gmail.
+pub fn about_mail(prompt: &str) -> bool {
+    let text = prompt.to_lowercase();
+    ["mail", "meyl", "posta", "gelen kutu", "inbox", "gmail"]
+        .iter()
+        .any(|word| text.contains(word))
+}
+
 /// Starts answering `prompt` in the conversation `session_id`: a new one, or one that
 /// already has messages when `resume` is set.
 pub fn ask(session_id: &str, resume: bool, request: &Request) -> anyhow::Result<Answer> {
@@ -154,43 +236,72 @@ pub fn ask(session_id: &str, resume: bool, request: &Request) -> anyhow::Result<
             "--include-partial-messages",
             "--verbose",
         ])
-        // Only read-only tools the user turned on, allowed without asking; no MCP servers,
-        // and none of the user's settings, whose hooks would show this chat in the island
-        // as one more agent session.
-        .args(["--strict-mcp-config", "--setting-sources", ""])
         // A command that runs away (a search of the whole home folder) is stopped after
         // 30 seconds instead of 2 minutes: the chat waits on it.
         .env("BASH_DEFAULT_TIMEOUT_MS", "30000");
+    let mut settings = serde_json::json!({});
+    if request.gmail {
+        // claude.ai's connectors only come with the user's settings; their hooks, which
+        // would show this chat in the island as one more agent session, stay off.
+        command.args(["--setting-sources", "user"]);
+        settings["disableAllHooks"] = true.into();
+    } else {
+        // Only read-only tools the user turned on, allowed without asking; no MCP
+        // servers, and none of the user's settings.
+        command.args(["--strict-mcp-config", "--setting-sources", ""]);
+    }
+    let control = request.control && !request.gmail;
+    let edit = request.edit && !request.gmail;
     let mut tools = Vec::new();
     if request.web {
         tools.extend(["WebSearch", "WebFetch"]);
     }
     // Working the computer and changing files need looking at files; reading them is
     // never asked about.
-    if request.files || request.control || request.edit {
+    if request.files || control || edit {
         tools.extend(["Read", "Glob", "Grep"]);
         command.args(["--add-dir", &home().to_string_lossy()]);
     }
     let mut allowed: Vec<&str> = tools.clone();
     // Tools asked about in the island, as for Claude Code in a terminal.
     let mut asked = Vec::new();
-    if request.control {
+    if control {
         tools.push("Bash");
         allowed.extend(SAFE_COMMANDS);
         asked.push("Bash");
     }
-    if request.edit {
+    if edit {
         tools.extend(EDIT_TOOLS);
         asked.extend(EDIT_TOOLS);
     }
+    if request.gmail {
+        allowed.extend(GMAIL_TOOLS);
+        command.args(["--disallowedTools", &GMAIL_FORBIDDEN.join(",")]);
+    }
     if !asked.is_empty() {
-        let hooks = serde_json::json!({ "hooks": { "PermissionRequest": [{ "matcher": asked.join("|"), "hooks": [{
+        settings["hooks"] = serde_json::json!({ "PermissionRequest": [{ "matcher": asked.join("|"), "hooks": [{
             "type": "command",
             "command": format!("{} claude-hook", arnotchctl().display()),
             "timeout": 600,
-        }]}]}});
-        command.args(["--settings", &hooks.to_string()]);
+        }]}]});
     }
+    // In auto mode the classifier would let file changes through too; they stay asked
+    // about, so the user sees each diff first.
+    if edit && request.mode == Mode::Auto {
+        settings["permissions"] = serde_json::json!({ "ask": EDIT_TOOLS });
+    }
+    command
+        .args(["--settings", &settings.to_string()])
+        // With Gmail, only the tools allowed above: the user's settings may say auto.
+        .args([
+            "--permission-mode",
+            if request.gmail {
+                Mode::Ask
+            } else {
+                request.mode
+            }
+            .flag(),
+        ]);
     if let Some(vault) = &request.vault {
         let servers = serde_json::json!({ "mcpServers": { "obsidian": {
             "command": "npx",
@@ -205,16 +316,22 @@ pub fn ask(session_id: &str, resume: bool, request: &Request) -> anyhow::Result<
             command.args(["--effort", effort]);
         }
     }
-    let mut prompt = match (request.control, request.edit) {
+    let mut prompt = match (control, edit) {
         (true, _) => format!("{SYSTEM_PROMPT} {CONTROL_PROMPT}"),
         (false, true) => SYSTEM_PROMPT.to_owned(),
         (false, false) => format!("{SYSTEM_PROMPT} {NO_CONTROL}"),
     };
-    if request.edit {
+    if edit {
         prompt = format!("{prompt}\n{EDIT_PROMPT}");
+    }
+    if request.gmail {
+        prompt = format!("{prompt}\n{GMAIL_PROMPT}");
     }
     if request.vault.is_some() {
         prompt = format!("{prompt}\n{NOTES_PROMPT}");
+    }
+    if request.mode == Mode::Plan && !request.gmail {
+        prompt = format!("{prompt}\n{PLAN_PROMPT}");
     }
     command
         .args(["--tools", &tools.join(",")])
@@ -554,6 +671,23 @@ enum Delta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spots_questions_about_mail() {
+        assert!(about_mail("Son maillerimde ne var?"));
+        assert!(about_mail("e-postalarımı özetle"));
+        assert!(about_mail("Gelen kutumda yeni bir şey var mı"));
+        assert!(about_mail("What's in my inbox?"));
+        assert!(!about_mail("Spotify'ı aç"));
+    }
+
+    #[test]
+    fn modes_from_settings() {
+        assert_eq!(Mode::from_name("plan").flag(), "plan");
+        assert_eq!(Mode::from_name("acceptEdits").flag(), "acceptEdits");
+        assert_eq!(Mode::from_name("ask").flag(), "default");
+        assert_eq!(Mode::from_name("").flag(), "auto");
+    }
 
     #[test]
     fn attachments_become_content_blocks() {

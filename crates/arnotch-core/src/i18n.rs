@@ -146,6 +146,14 @@ fn turkish(text: &str) -> Option<&'static str> {
         "Denied from arnotch" => "arnotch'tan reddedildi",
         // Focus
         "Focusing" => "Odaklanılıyor",
+        // Mail
+        "No app password saved for {}: add one in the settings" => {
+            "{} için kayıtlı uygulama şifresi yok: ayarlardan ekle"
+        }
+        "Gmail refused the login: check the app password" => {
+            "Gmail girişi reddetti: uygulama şifresini kontrol et"
+        }
+        "IMAP failed: {}" => "IMAP hatası: {}",
         // Phone
         "{} is not in reach" => "{} erişimde değil",
         "Can't ring the phone" => "Telefon çaldırılamadı",

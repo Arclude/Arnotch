@@ -57,6 +57,13 @@ Window {
     readonly property bool targetsShown: dragging || choosing
     readonly property string shownTab: targetsShown ? "drop" : opened ? tab : "activity"
 
+    // Asks Claude about a mail in the chat, which it shows.
+    function askAboutMail(text) {
+        mailAsked(text)
+        tab = "chat"
+        opened = true
+    }
+
     // Shows the targets for files to click one of; gives up after 20 seconds.
     function choose(urls) {
         pendingUrls = urls
@@ -73,6 +80,8 @@ Window {
     signal settingsRequested()
     // The user asked Claude something in the chat.
     signal asked(string text)
+    // ...about a mail: Claude may read Gmail and save drafts
+    signal mailAsked(string text)
     // The user wants to ask by voice, or to stop talking by voice.
     signal listenRequested()
     signal conversationEnded()
@@ -83,7 +92,7 @@ Window {
     readonly property bool showCard: onActivity && notch.focus !== null && !notch.notifying
                                      && (notch.focus.steps.length > 0 || !!notch.focus.permission)
     readonly property int expandedWidth: targetsShown ? 620
-                                       : shownTab === "terminals" || shownTab === "shelf" ? 540
+                                       : shownTab === "terminals" || shownTab === "shelf" || shownTab === "mail" ? 540
                                        : showCard || shownTab === "chat" ? 640 : 470
     readonly property int maxExpandedWidth: 640
     readonly property int expandedHeight: expandedContent.implicitHeight + 28
@@ -131,10 +140,11 @@ Window {
     // The transparent rest lets clicks through anyway (see inputRect).
     height: windowHeight
     readonly property real wantedHeight: heightSpring.extent + pad
-    // Starts tall enough for most of what the island shows opened, so even the first
-    // opening needs no resize; from then on it only grows. (The assignment ends the binding.)
+    // Starts tall enough for what the island shows opened (a chat or a question from Claude
+    // can take most of the screen), so an opening needs no resize mid-way, which made it
+    // stutter; from then on it only grows. (The assignment ends the binding.)
     property real windowHeight: wantedHeight
-    Component.onCompleted: windowHeight = Math.max(wantedHeight, 320)
+    Component.onCompleted: windowHeight = Math.max(wantedHeight, Math.min(Screen.height * 0.85, 900))
     // Changes that come together (the content's height settles over a few bindings when
     // the island opens) are applied once.
     onWantedHeightChanged: Qt.callLater(growHeight)
@@ -690,10 +700,13 @@ Window {
         Column {
             id: expandedContent
 
+            // Laid out at the width the island is heading for, not the width it has mid-way:
+            // at the narrow width of the start, text wraps onto many lines and the height
+            // the island aims for shot far down before coming back up.
             anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: 14
+            anchors.topMargin: 14
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: root.expandedWidth - 28
             spacing: 10
             opacity: root.expanded ? 1 : 0
             visible: opacity > 0
@@ -711,7 +724,8 @@ Window {
                         { id: "chat", label: qsTr("Chat") },
                         { id: "terminals", label: qsTr("Terminals") + "  " + root.notch.terminals.length },
                         { id: "shelf", label: qsTr("Shelf") + (root.notch.shelf.length ? "  " + root.notch.shelf.length : "") }
-                    ].concat(root.settings.phone ? [{ id: "phone", label: qsTr("Phone") + (root.notch.phone ? "  " + root.notch.phone.percent + "%" : "") }] : [])
+                    ].concat(root.settings.mailAddress ? [{ id: "mail", label: qsTr("Mail") + (root.notch.unreadMails ? "  " + root.notch.unreadMails : "") }] : [])
+                     .concat(root.settings.phone ? [{ id: "phone", label: qsTr("Phone") + (root.notch.phone ? "  " + root.notch.phone.percent + "%" : "") }] : [])
 
                     Rectangle {
                         id: tabChip
@@ -838,6 +852,23 @@ Window {
                 }
             }
 
+            MailView {
+                width: parent.width
+                visible: root.shownTab === "mail"
+                mails: root.notch.mails
+                error: root.notch.mailError
+                address: root.settings.mailAddress
+                onRefresh: root.bridge.setMailAddress(root.settings.mailAddress)
+                onOpen: mail => {
+                    Qt.openUrlExternally(mail.link)
+                    root.opened = false
+                }
+                onSummarize: mail => root.askAboutMail(qsTr("Summarize this email in a few sentences: what it says, what it asks of me, and whether it needs an answer. Read it with the Gmail tools (message id %1). From: %2 <%3>, subject: %4")
+                                                       .arg(mail.id).arg(mail.from).arg(mail.address).arg(mail.subject))
+                onDraft: mail => root.askAboutMail(qsTr("Write a reply to this email, in its language. Read the message and its thread with the Gmail tools first (message id %1), show me the reply here, and save it in Gmail as a draft with create_draft and replyToMessageId %1. Don't send it. From: %2 <%3>, subject: %4")
+                                                   .arg(mail.id).arg(mail.from).arg(mail.address).arg(mail.subject))
+            }
+
             PhoneView {
                 width: parent.width
                 visible: root.shownTab === "phone"
@@ -858,6 +889,12 @@ Window {
                 onDetached: path => root.notch.chatAttachments = root.notch.chatAttachments.filter(p => p !== path)
                 voice: root.notch.voice
                 onAsked: text => root.asked(text)
+                mode: root.settings.chatMode
+                onModeChosen: chosen => root.settings.chatMode = chosen
+                onPlanApproved: {
+                    root.settings.chatMode = root.settings.chatWorkMode
+                    root.asked(qsTr("Carry out the plan."))
+                }
                 onListen: root.listenRequested()
                 onListened: root.bridge.stopListening()
                 onUnheard: root.conversationEnded()

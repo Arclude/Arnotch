@@ -10,6 +10,8 @@ Rectangle {
 
     signal submitted(string text)
     signal cancelled()
+    // Shift+Tab
+    signal backtabbed()
 
     function focusInput() {
         input.forceActiveFocus()
@@ -52,6 +54,7 @@ Rectangle {
         }
         Keys.onEnterPressed: Keys.returnPressed(event)
         Keys.onEscapePressed: field.cancelled()
+        Keys.onBacktabPressed: field.backtabbed()
     }
 
     Text {

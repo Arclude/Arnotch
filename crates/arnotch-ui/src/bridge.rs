@@ -51,6 +51,11 @@ pub mod qobject {
             reply: &QString,
         ) -> bool;
 
+        /// Whether `session_id` is the chat's conversation with Claude (not a terminal's).
+        #[qinvokable]
+        #[cxx_name = "isChatSession"]
+        fn is_chat_session(self: &NotchBridge, session_id: &QString) -> bool;
+
         /// Answers a pending permission request: "allow", "deny" or "ask".
         #[qinvokable]
         #[cxx_name = "answerPermission"]
@@ -103,7 +108,9 @@ pub mod qobject {
             edit: bool,
             speak: bool,
             model: &QString,
+            mode: &QString,
             vault: &QString,
+            gmail: bool,
         ) -> u32;
 
         /// Stops reading the answer aloud.
@@ -131,6 +138,23 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setWeatherCity"]
         fn set_weather_city(self: &NotchBridge, city: &QString);
+
+        /// The Gmail address whose inbox is checked (empty: no mail). The inbox arrives as
+        /// `mail` events. Also checks it right away.
+        #[qinvokable]
+        #[cxx_name = "setMailAddress"]
+        fn set_mail_address(self: &NotchBridge, address: &QString);
+
+        /// Saves the Google app password for `address` in the Secret Service (an empty one
+        /// removes it); returns what went wrong, empty when it worked.
+        #[qinvokable]
+        #[cxx_name = "setMailPassword"]
+        fn set_mail_password(self: &NotchBridge, address: &QString, password: &QString) -> QString;
+
+        /// Whether an app password is saved for `address`.
+        #[qinvokable]
+        #[cxx_name = "hasMailPassword"]
+        fn has_mail_password(self: &NotchBridge, address: &QString) -> bool;
 
         /// Keeps the desktop's notifications quiet (Do Not Disturb), or lets them through again.
         #[qinvokable]
@@ -241,6 +265,8 @@ struct Chat {
     pid: Option<u32>,
     /// The model of the last message, which a short follow-up keeps.
     model: Option<route::Model>,
+    /// The conversation is about mail: Claude reaches Gmail until a new chat.
+    gmail: bool,
 }
 
 static CHAT: Mutex<Option<Chat>> = Mutex::new(None);
@@ -252,6 +278,7 @@ fn with_chat<T>(f: impl FnOnce(&mut Chat) -> T) -> T {
         turn: 0,
         pid: None,
         model: None,
+        gmail: false,
     }))
 }
 
@@ -278,6 +305,28 @@ pub fn publish_weather(weather: Option<arnotch_core::weather::Weather>) {
     let event = Event::Weather { weather };
     *WEATHER.lock().unwrap() = Some(event.clone());
     _ = event_bus().send(event);
+}
+
+/// Tells the mail thread about a new address, or to check now.
+pub static MAIL_ADDRESS: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+/// The inbox, replayed to bridges created after it was published (without what arrived).
+static MAIL: Mutex<Option<Event>> = Mutex::new(None);
+
+pub fn publish_mail(
+    mails: Vec<arnotch_core::mail::Mail>,
+    arrived: Vec<arnotch_core::mail::Mail>,
+    error: String,
+) {
+    *MAIL.lock().unwrap() = Some(Event::Mail {
+        mails: mails.clone(),
+        arrived: Vec::new(),
+        error: error.clone(),
+    });
+    _ = event_bus().send(Event::Mail {
+        mails,
+        arrived,
+        error,
+    });
 }
 
 /// The transfers in progress, likewise.
@@ -683,8 +732,10 @@ impl qobject::NotchBridge {
     /// `attachments` holds one path per line; `web` and `files` turn on Claude's
     /// read-only web and file tools, `control` its commands to work the computer, `edit`
     /// changing files (each change asked about in the island). `model`
-    /// is "auto" (chosen for each message) or the model to use; `vault` the Obsidian vault
-    /// research is written to, empty for none.
+    /// is "auto" (chosen for each message) or the model to use; `mode` what Claude may do
+    /// without asking (see [`chat::Mode::from_name`]); `vault` the Obsidian vault research
+    /// is written to, empty for none; `gmail` lets Claude read the user's Gmail and save
+    /// drafts.
     pub fn ask_claude(
         &self,
         prompt: &QString,
@@ -695,7 +746,9 @@ impl qobject::NotchBridge {
         edit: bool,
         speak: bool,
         model: &QString,
+        mode: &QString,
         vault: &QString,
+        gmail: bool,
     ) -> u32 {
         // A new question silences the previous answer.
         stop_speaking();
@@ -711,6 +764,8 @@ impl qobject::NotchBridge {
             files,
             control,
             edit,
+            mode: chat::Mode::from_name(&mode.to_string()),
+            gmail,
             route: None,
             vault: Some(vault.to_string())
                 .filter(|v| !v.is_empty())
@@ -733,6 +788,8 @@ impl qobject::NotchBridge {
                 chat.model,
             );
             chat.model = Some(route.model);
+            chat.gmail |= request.gmail || chat::about_mail(&request.prompt);
+            request.gmail = chat.gmail;
             (chat.session_id.clone(), chat.turn, route)
         });
         request.route = Some(route);
@@ -863,6 +920,27 @@ impl qobject::NotchBridge {
         if let Some(tx) = WEATHER_CITY.get() {
             _ = tx.send(city.to_string());
         }
+    }
+
+    pub fn set_mail_address(&self, address: &QString) {
+        if let Some(tx) = MAIL_ADDRESS.get() {
+            _ = tx.send(address.to_string());
+        }
+    }
+
+    pub fn set_mail_password(&self, address: &QString, password: &QString) -> QString {
+        let address = address.to_string();
+        match arnotch_core::mail::save_password(address.trim(), &password.to_string()) {
+            Ok(()) => {
+                self.set_mail_address(&QString::from(address.as_str()));
+                QString::default()
+            }
+            Err(err) => QString::from(format!("{err:#}").as_str()),
+        }
+    }
+
+    pub fn has_mail_password(&self, address: &QString) -> bool {
+        arnotch_core::mail::has_password(address.to_string().trim())
     }
 
     pub fn set_do_not_disturb(&self, on: bool) {
@@ -1015,6 +1093,13 @@ impl qobject::NotchBridge {
         }
     }
 
+    pub fn is_chat_session(&self, session_id: &QString) -> bool {
+        let session_id = session_id.to_string();
+        let chat = with_chat(|chat| chat.session_id == session_id);
+        tracing::info!("permission asked by {session_id} (the chat's: {chat})");
+        chat
+    }
+
     pub fn set_microphone(&self, name: &QString) {
         voice::choose_input(&name.to_string());
     }
@@ -1056,6 +1141,7 @@ impl qobject::NotchBridge {
             }
             chat.session_id = chat::new_session_id();
             chat.model = None;
+            chat.gmail = false;
         });
     }
 }
@@ -1098,6 +1184,7 @@ impl cxx_qt::Initialize for qobject::NotchBridge {
             CLIPBOARD.lock().unwrap().clone(),
             CALENDAR.lock().unwrap().clone(),
             WEATHER.lock().unwrap().clone(),
+            MAIL.lock().unwrap().clone(),
             JOBS.lock().unwrap().clone(),
             PHONE.lock().unwrap().clone(),
             PRIVACY_EVENT.lock().unwrap().clone(),

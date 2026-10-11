@@ -60,6 +60,12 @@ QtObject {
         // The chat's model: "auto" (Haiku, Sonnet or Opus, chosen for each message), or
         // "haiku", "sonnet", "opus" for all of them
         property string chatModel: "auto"
+        // What Claude in the chat may do without asking, as Claude Code's permission modes:
+        // "ask", "auto", "acceptEdits" or "plan". A plan is carried out in chatWorkMode,
+        // the last mode that wasn't "plan".
+        property string chatMode: "auto"
+        property string chatWorkMode: "auto"
+        onChatModeChanged: if (chatMode !== "plan") chatWorkMode = chatMode
         // "auto": also pick the model of Claude Code in terminals, for each prompt
         // (arnotchctl claude-hook reads it from this file); "off" leaves them be
         property string terminalModel: "off"
@@ -77,6 +83,10 @@ QtObject {
         // City for the weather, e.g. "İstanbul" or "Kadıköy, İstanbul"; empty for none
         property string weatherCity: ""
         onWeatherCityChanged: app.bridge.setWeatherCity(weatherCity)
+        // The Gmail address whose inbox the Mail tab shows; empty for none. Its app
+        // password is in the Secret Service, not here.
+        property string mailAddress: ""
+        onMailAddressChanged: app.bridge.setMailAddress(mailAddress)
     }
 
     // The desktop's notifications are quiet while focusing.
@@ -134,9 +144,25 @@ QtObject {
                 app.state.notifying = true
         }
 
+        onPermissionClosed: requestId => {
+            if (app.voicePermission === requestId)
+                app.voicePermission = ""
+        }
+
         // Asked by voice: the question goes to Claude like a typed one. An answer that isn't
-        // read aloud is shown.
+        // read aloud is shown. While Claude waits for permission, it is the answer.
         onVoiceAsked: text => {
+            if (app.voicePermission !== "") {
+                const answer = app.state.permissionAnswer(text)
+                if (answer !== "") {
+                    app.bridge.answerPermission(app.voicePermission, answer)
+                    app.voicePermission = ""
+                } else {
+                    app.state.say(qsTr("Say yes or no"), text, 5000)
+                    app.bridge.startListening()
+                }
+                return
+            }
             if (app.state.endsConversation(text)) {
                 app.endConversation()
                 return
@@ -152,10 +178,19 @@ QtObject {
                 app.bridge.startListening()
         }
 
-        onPermissionRequested: requestId => {
+        onPermissionRequested: (requestId, sessionId) => {
             if (!app.settings.permissionPrompts) {
                 app.bridge.answerPermission(requestId, "ask")
                 return
+            }
+            // The chat's Claude: "evet" or "hayır" answers it, listened for at once when the
+            // question was asked by voice.
+            if (app.bridge.isChatSession(sessionId)) {
+                app.voicePermission = requestId
+                if (app.state.conversing || app.askedByVoice) {
+                    app.state.conversing = true
+                    app.bridge.startListening()
+                }
             }
             for (let i = 0; i < app.islands.count; i++)
                 app.islands.objectAt(i).tab = "activity"
@@ -166,6 +201,7 @@ QtObject {
         Component.onCompleted: {
             setCalendarUrl(app.settings.calendarUrl)
             setWeatherCity(app.settings.weatherCity)
+            setMailAddress(app.settings.mailAddress)
             setDoNotDisturb(app.doNotDisturb)
             setMicrophone(app.settings.microphone)
             app.updateWakeWord()
@@ -218,6 +254,7 @@ QtObject {
             bridge: app.bridge
             onSettingsRequested: app.openSettings()
             onAsked: text => app.askClaude(text, false)
+            onMailAsked: text => app.askClaude(text, false, true)
             onListenRequested: app.listen("start")
             onConversationEnded: app.endConversation()
         }
@@ -228,17 +265,28 @@ QtObject {
     // Whether the current answer is read aloud, and the last turn read to the end
     property bool speakingTurn: false
     property int spokenTurn: -1
+    // The chat's permission request waiting for an answer, "" when none: said aloud,
+    // "evet" or "hayır" answers it
+    property string voicePermission: ""
+    // The last message to the chat was asked by voice: its permission requests are
+    // listened for
+    property bool askedByVoice: false
 
     // Sends a message to Claude in the chat, with the files attached to it. The answer is
-    // read aloud as the settings say; returns whether it is.
-    function askClaude(text, byVoice) {
+    // read aloud as the settings say; returns whether it is. `gmail`: about a mail, so
+    // Claude reads Gmail and saves drafts for the rest of the conversation.
+    function askClaude(text, byVoice, gmail) {
+        if (gmail)
+            state.chatGmail = true
         const files = state.chatAttachments
         const speak = settings.speakAnswers === "always" || (settings.speakAnswers === "voice" && byVoice)
+        askedByVoice = byVoice
         speakingTurn = speak
         const turn = bridge.askClaude(text, files.join("\n"), settings.chatWeb, settings.chatFiles,
                                       settings.computerControl, settings.chatEdit, speak,
-                                      settings.chatModel, settings.obsidianVault)
-        state.startChatTurn(turn, text, files)
+                                      settings.chatModel, settings.chatMode, settings.obsidianVault,
+                                      state.chatGmail)
+        state.startChatTurn(turn, text, files, settings.chatMode)
         state.chatAttachments = []
         return speak
     }
@@ -258,7 +306,8 @@ QtObject {
             endConversation()
         } else if (action === "stop" || (action === "toggle" && state.listening)) {
             bridge.stopListening()
-        } else if (state.voice === null && !(state.conversing && state.chatBusy && !state.speaking)) {
+        } else if (state.voice === null
+                   && (voicePermission !== "" || !(state.conversing && state.chatBusy && !state.speaking))) {
             state.conversing = true
             bridge.startListening()
             // Heard from anywhere, even with the island out of sight.
@@ -321,7 +370,7 @@ QtObject {
     function openSettings() {
         // Created on demand so Qt Quick Controls is only loaded when the window is used.
         if (!settingsWindow)
-            settingsWindow = Qt.createComponent("SettingsWindow.qml").createObject(null, { settings: app.settings, notch: app.state })
+            settingsWindow = Qt.createComponent("SettingsWindow.qml").createObject(null, { settings: app.settings, notch: app.state, bridge: app.bridge })
         settingsWindow.show()
         settingsWindow.raise()
         settingsWindow.requestActivate()

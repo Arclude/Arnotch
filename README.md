@@ -30,6 +30,7 @@ command's last `output` lines), `waiting`, `done`, `ended`.
 - Rust (stable)
 - Qt 6 (`qt6-base`, `qt6-declarative`)
 - [LayerShellQt](https://invent.kde.org/plasma/layer-shell-qt) (`layer-shell-qt`) for Wayland
+- `curl`; `secret-tool` (`libsecret`) for *Mail*
 
 Works on Wayland compositors with `wlr-layer-shell` (KDE Plasma, Hyprland, Sway, niri, COSMIC)
 and on X11. GNOME does not support layer-shell yet.
@@ -137,7 +138,12 @@ text files with their contents. In the settings, Claude
 can be allowed to search the web (on by default) and to read files on this computer (off); both
 are read-only. Claude can also change files (on by default): each change waits for your Allow
 in the island, which shows the diff, and once made the chat shows it under the answer (▾ folds
-it). None of your Claude Code settings, hooks or MCP servers are used. The answer is streamed as it is
+it). What Claude may do without asking follows Claude Code's permission modes, switched with the
+button next to the chat's field (or Shift+Tab in it) or in the settings: *Auto* (the default:
+safe commands, such as fetching a page for research, run right away, risky ones and file changes
+come to the island), *Accept edits* (files change without asking, commands are asked), *Plan*
+(Claude only looks into things and answers with a plan; *Carry out the plan* under it goes ahead
+in the previous mode) and *Ask first*. None of your Claude Code settings, hooks or MCP servers are used. The answer is streamed as it is
 written; ■ stops it. Set `ARNOTCH_CLAUDE` if `claude` is not on the `PATH` or in `~/.local/bin`.
 
 On KDE Plasma, `contrib/install.sh` binds **Meta+Space** to open and close the chat (a custom
@@ -305,6 +311,31 @@ arnotch downloads it every 10 minutes. The *Activity* tab shows the meeting unde
 next, with a **Join** button when it has a Meet, Zoom or Teams link, and the island opens ten
 minutes before a meeting and when it starts. Recurring meetings, cancelled and moved instances
 are handled. The address is a secret: it is never logged.
+
+## Mail
+
+The *Mail* tab (`arnotchctl open mail`) shows a Gmail inbox: the 15 newest messages of the last
+30 days, with the sender, subject, the start of the text and the time; unread ones are bold, and
+delivery failures (from `mailer-daemon` or `postmaster`) are marked in red as *Returned*.
+arnotch checks the inbox every 2 minutes, and new mail opens the island, unless you are focusing:
+then it waits for the break, like other notifications.
+
+Set it up in the settings (*Mail*): the Gmail address, and a Google [app
+password](https://myaccount.google.com/apppasswords) for it (the account needs 2-Step
+Verification; a Workspace admin may have to allow app passwords). The password is kept in the
+Secret Service (KWallet, GNOME Keyring) through `secret-tool`, never in the settings file, and goes
+to curl on its standard input, so it never shows up in the process list. arnotch only reads over
+IMAP with curl; curl's fetch marks a message read, so the new messages that were unread are marked
+unread again right after.
+
+Pointing at a message shows what can be done with it: **Open in Gmail**, **Summarize** and
+**Draft a reply**. The last two ask Claude in the chat, through the Gmail connector of your
+claude.ai account (connect Gmail there, under Settings › Connectors, with the same account). The
+reply is shown in the chat and saved as a draft in Gmail, in the message's thread; it is never
+sent: Claude can read mail and create or update drafts, and the connector's tools that send, reply,
+forward or delete are blocked. For the rest of that conversation the chat keeps Gmail and leaves out
+commands and file changes. To reach the connector this chat loads your Claude Code user settings,
+with their hooks turned off.
 
 ## Media
 
